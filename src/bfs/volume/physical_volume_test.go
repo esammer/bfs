@@ -1,6 +1,7 @@
 package volume
 
 import (
+	"io"
 	"os"
 	"testing"
 )
@@ -45,6 +46,29 @@ func TestPhysicalVolume_Open(t *testing.T) {
 
 		if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
 			t.Fatalf("Failed to remove temp directory - %v", err)
+		}
+	})
+
+	t.Run("volume-is-file", func(t *testing.T) {
+		t.Parallel()
+
+		if f, err := os.OpenFile("build/test/" + t.Name(), os.O_CREATE | os.O_WRONLY, 0600); err != nil {
+			t.Fatalf("Failed to create test file - %v", err)
+			defer f.Close()
+		}
+
+		pv := NewPhysicalVolume("build/test/" + t.Name())
+
+		if err := pv.Open(false); err == nil {
+			t.Error("Open succeeded for volume at file")
+		} else {
+			t.Logf("Properly got %v", err)
+		}
+
+		// No call to pv.Close() because the volume shouldn't open.
+
+		if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
+			t.Fatalf("Failed to remove test file - %v", err)
 		}
 	})
 }
