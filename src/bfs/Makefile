@@ -33,5 +33,5 @@ check: compile
 	$(GO) test -v $(TEST_ARGS) $(PACKAGES)
 
 format:
-	$(GO) fmt
+	$(GO) fmt $(PACKAGES)
 
