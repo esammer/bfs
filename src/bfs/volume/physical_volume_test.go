@@ -19,7 +19,9 @@ func TestPhysicalVolume_Open(t *testing.T) {
 			t.Error("Open failed for non-existant path - %v", err)
 		}
 
-		pv.Close()
+		if err := pv.Close(); err != nil {
+			t.Fatalf("Failed to close volume - %v", err)
+		}
 
 		if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
 			t.Fatalf("Failed to remove temp directory - %v", err)
@@ -39,7 +41,7 @@ func TestPhysicalVolume_Open(t *testing.T) {
 			t.Error("Open succeeded for non-existant path")
 		}
 
-		pv.Close()
+		// No call to pv.Close() because the volume shouldn't open.
 
 		if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
 			t.Fatalf("Failed to remove temp directory - %v", err)
