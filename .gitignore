@@ -1,0 +1,9 @@
+# Build directories
+
+bin/
+pkg/
+*/build/*
+
+# Vim temp files
+
+*.sw[op]
