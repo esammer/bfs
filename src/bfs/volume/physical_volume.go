@@ -85,9 +85,17 @@ func (this *PhysicalVolume) Close() error {
 }
 
 func (this *PhysicalVolume) ReaderFor(blockId string) (block.BlockReader, error) {
+	if this.state != VOLUME_OPEN {
+		return nil, fmt.Errorf("Can not create block reader on volume in state %v", this.state)
+	}
+
 	return block.NewReader(this.RootPath, blockId)
 }
 
 func (this *PhysicalVolume) WriterFor(blockId string) (block.BlockWriter, error) {
+	if this.state != VOLUME_OPEN {
+		return nil, fmt.Errorf("Can not create block writer on volume in state %v", this.state)
+	}
+
 	return block.NewWriter(this.RootPath, blockId)
 }
