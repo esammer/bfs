@@ -43,8 +43,6 @@ func (this *Writer) Write(buffer []byte) (int, error) {
 		if this.blockPos == this.blockSize || this.blockCount == 0 {
 			this.blockCount++
 
-			log.Printf("Allocated block %d - old blockPos: %d filePos: %d", this.blockCount, this.blockPos, this.filePos)
-
 			if this.blockWriter != nil {
 				if err := this.blockWriter.Close(); err != nil {
 					return 0, err
@@ -56,6 +54,8 @@ func (this *Writer) Write(buffer []byte) (int, error) {
 			} else {
 				return 0, err
 			}
+
+			log.Printf("Allocated block %d - old blockPos: %d filePos: %d", this.blockCount, this.blockPos, this.filePos)
 
 			this.blockPos = 0
 		}
