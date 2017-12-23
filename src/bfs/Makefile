@@ -1,11 +1,11 @@
 PROJECT = bfs
 GO = go
-PACKAGES = $(PROJECT)/volume $(PROJECT)/block
+PACKAGES = . $(PROJECT)/volume $(PROJECT)/block
 
 .PHONEY: help all compile clean check format
 
 help:
-	echo "Supported targets for $(PROJECT):\n\
+	@echo "Supported targets for $(PROJECT):\n\
 	\n\
 	  Standard:\n\
 	    all       run compile and check.\n\
