@@ -18,6 +18,10 @@ type Namespace struct {
 	db     *leveldb.DB
 }
 
+// Default LevelDB read and write options.
+var defaultReadOpts *opt.ReadOptions = &opt.ReadOptions{}
+var defaultWriteOpts *opt.WriteOptions = &opt.WriteOptions{Sync: true}
+
 func New(dbPath string) *Namespace {
 	return &Namespace{
 		dbPath: dbPath,
@@ -35,12 +39,12 @@ func (this *Namespace) Open() error {
 		this.db = db
 	}
 
-	if ok, err := this.db.Has([]byte("global/blockId"), &opt.ReadOptions{}); ok {
+	if ok, err := this.db.Has([]byte("global/blockId"), defaultReadOpts); ok {
 		glog.V(1).Info("Last blockId exists")
 	} else if err != nil {
 		return err
 	} else {
-		if err := this.db.Put([]byte("global/blockId"), []byte{byte(0)}, &opt.WriteOptions{}); err != nil {
+		if err := this.db.Put([]byte("global/blockId"), []byte{byte(0)}, defaultWriteOpts); err != nil {
 			glog.Errorf("Failed to set initial blockId for the namespace - %v", err)
 			return err
 		} else {
@@ -57,14 +61,14 @@ func (this *Namespace) Add(path string, blockIds []string) error {
 	if value, err := json.Marshal(blockIds); err != nil {
 		return err
 	} else {
-		return this.db.Put([]byte(path), value, &opt.WriteOptions{Sync: true})
+		return this.db.Put([]byte(path), value, defaultWriteOpts)
 	}
 }
 
 func (this *Namespace) Get(path string) (*Entry, error) {
 	glog.V(1).Infof("Getting entry %v", path)
 
-	if value, err := this.db.Get([]byte(path), &opt.ReadOptions{}); err != nil {
+	if value, err := this.db.Get([]byte(path), defaultReadOpts); err != nil {
 		return nil, err
 	} else {
 		var blockIds []string
@@ -88,7 +92,7 @@ func (this *Namespace) List(from string, to string) ([]*Entry, error) {
 		Limit: []byte(to),
 	}
 
-	iter := this.db.NewIterator(r, &opt.ReadOptions{})
+	iter := this.db.NewIterator(r, defaultReadOpts)
 	defer iter.Release()
 
 	entries := make([]*Entry, 0)
