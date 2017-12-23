@@ -26,6 +26,7 @@ func main() {
 			glog.Fatalf("Unable to open writer - %v", err)
 		} else {
 			io.WriteString(writer, "Hello world. How do you do?")
+			writer.Close()
 		}
 	}
 
