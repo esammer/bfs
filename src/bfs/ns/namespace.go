@@ -19,8 +19,8 @@ type Namespace struct {
 }
 
 // Default LevelDB read and write options.
-var defaultReadOpts *opt.ReadOptions = &opt.ReadOptions{}
-var defaultWriteOpts *opt.WriteOptions = &opt.WriteOptions{Sync: true}
+var defaultReadOpts = &opt.ReadOptions{}
+var defaultWriteOpts = &opt.WriteOptions{Sync: true}
 
 const (
 	// The initial size of the result buffer for List() operations. The result
