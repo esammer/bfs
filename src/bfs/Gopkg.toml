@@ -25,3 +25,11 @@
   #branch = "master"
   revision = "23def4e6c14b4da8ac2ed8007337bc5eb5007998"
   name = "github.com/golang/glog"
+
+[[constraint]]
+  name = "github.com/syndtr/goleveldb"
+  revision = "34011bf325bce385408353a30b101fe5e923eb6e"
+
+[[constraint]]
+  name = "github.com/stretchr/testify"
+  version = "1.1.4"
