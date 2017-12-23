@@ -2,7 +2,7 @@
 
 bin/
 pkg/
-*/build/*
+**/build/**
 
 # Vim temp files
 
