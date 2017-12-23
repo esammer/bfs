@@ -1,6 +1,6 @@
 PROJECT = bfs
 GO = go
-PACKAGES = . $(PROJECT)/volume $(PROJECT)/block
+PACKAGES = . $(PROJECT)/volume $(PROJECT)/block $(PROJECT)/ns
 
 .PHONEY: help all compile clean check format
 
@@ -30,7 +30,7 @@ clean:
 	rm -rf $(GOPATH)/pkg $(GOPATH)/bin
 
 check: compile
-	$(GO) test $(TEST_ARGS) $(PACKAGES)
+	$(GO) test $(TEST_ARGS) $(PACKAGES) $(TEST_EXTRA_ARGS)
 
 format:
 	$(GO) fmt $(PACKAGES)
