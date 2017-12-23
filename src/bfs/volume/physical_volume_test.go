@@ -65,8 +65,6 @@ func TestPhysicalVolume_Open(t *testing.T) {
 
 		if err := pv.Open(false); err == nil {
 			t.Fatal("Open succeeded for volume at file")
-		} else {
-			t.Logf("Properly got %v", err)
 		}
 
 		// No call to pv.Close() because the volume shouldn't open.
@@ -85,8 +83,6 @@ func TestPhysicalVolume_StateTransitions(t *testing.T) {
 
 		if _, err := pv.ReaderFor("1"); err == nil {
 			t.Fatalf("Created a reader on unopen volume")
-		} else {
-			t.Logf("Properly got %v", err)
 		}
 	})
 
@@ -97,8 +93,6 @@ func TestPhysicalVolume_StateTransitions(t *testing.T) {
 
 		if _, err := pv.WriterFor("1"); err == nil {
 			t.Fatalf("Created a writer on unopen volume")
-		} else {
-			t.Logf("Properly got %v", err)
 		}
 	})
 }
