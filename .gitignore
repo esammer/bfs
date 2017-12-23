@@ -8,3 +8,8 @@ pkg/
 # Vim temp files
 
 *.sw[op]
+
+# Intellij files
+
+.idea/
+*.iml
