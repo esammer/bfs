@@ -58,7 +58,8 @@ func TestPhysicalVolume_Open(t *testing.T) {
 
 		if f, err := os.OpenFile("build/test/"+t.Name(), os.O_CREATE|os.O_WRONLY, 0600); err != nil {
 			t.Fatalf("Failed to create test file - %v", err)
-			defer f.Close()
+		} else {
+			f.Close()
 		}
 
 		pv := NewPhysicalVolume("build/test/" + t.Name())
