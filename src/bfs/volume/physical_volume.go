@@ -3,7 +3,7 @@ package volume
 import (
 	"errors"
 	"fmt"
-	"log"
+	"github.com/golang/glog"
 	"os"
 
 	"bfs/block"
@@ -28,7 +28,7 @@ const (
 )
 
 func NewPhysicalVolume(rootPath string) *PhysicalVolume {
-	log.Printf("Create physical volume at %v", rootPath)
+	glog.V(1).Infof("Create physical volume at %v", rootPath)
 
 	return &PhysicalVolume{
 		RootPath: rootPath,
@@ -37,7 +37,7 @@ func NewPhysicalVolume(rootPath string) *PhysicalVolume {
 }
 
 func (this *PhysicalVolume) Open(allowInitialization bool) error {
-	log.Printf("Open physical volume at %v", this.RootPath)
+	glog.Infof("Open physical volume at %v", this.RootPath)
 
 	if this.state == VOLUME_INITIAL {
 		if info, err := os.Stat(this.RootPath); err == nil {
@@ -48,11 +48,11 @@ func (this *PhysicalVolume) Open(allowInitialization bool) error {
 			}
 		} else {
 			if allowInitialization {
-				log.Printf("Volume path %v does not exist - creating it.", this.RootPath)
+				glog.Infof("Volume path %v does not exist - creating it.", this.RootPath)
 
 				// NB: This overrides err and simply returns it no matter what. See comment below.
 				if err = os.MkdirAll(this.RootPath, 0700); err == nil {
-					log.Printf("Volme path created at %v", this.RootPath)
+					glog.Infof("Volme path created at %v", this.RootPath)
 					this.state = VOLUME_OPEN
 				}
 			}
@@ -73,7 +73,7 @@ func (this *PhysicalVolume) Open(allowInitialization bool) error {
 }
 
 func (this *PhysicalVolume) Close() error {
-	log.Printf("Close physical volume at %v", this.RootPath)
+	glog.Infof("Close physical volume at %v", this.RootPath)
 
 	if this.state == VOLUME_OPEN {
 		this.state = VOLUME_CLOSED

@@ -1,8 +1,8 @@
 package block
 
 import (
+	"github.com/golang/glog"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 )
@@ -28,7 +28,7 @@ type LocalBlockReader struct {
 func NewReader(rootPath string, blockId string) (*LocalBlockReader, error) {
 	path := filepath.Join(rootPath, blockId)
 
-	log.Printf("Open block %v @ %v for read", blockId, path)
+	glog.V(1).Infof("Open block %v @ %v for read", blockId, path)
 
 	if reader, err := os.Open(path); err == nil {
 		return &LocalBlockReader{
@@ -41,16 +41,16 @@ func NewReader(rootPath string, blockId string) (*LocalBlockReader, error) {
 }
 
 func (this *LocalBlockReader) Read(buffer []byte) (int, error) {
-	log.Printf("Reading up to %v bytes from block %v", len(buffer), this.BlockId)
+	glog.V(2).Infof("Reading up to %v bytes from block %v", len(buffer), this.BlockId)
 
 	return this.Reader.Read(buffer)
 }
 
 func (this *LocalBlockReader) Close() error {
-	log.Printf("Closing block reader for block %v", this.BlockId)
+	glog.V(1).Infof("Closing block reader for block %v", this.BlockId)
 
 	if err := this.Reader.Close(); err == nil {
-		log.Printf("Block reader closed")
+		glog.V(1).Infof("Block reader closed")
 		return nil
 	} else {
 		return err
