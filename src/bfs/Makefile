@@ -2,6 +2,7 @@ PROJECT = bfs
 GO = go
 DEP = dep
 PACKAGES = . $(PROJECT)/volume $(PROJECT)/block $(PROJECT)/ns
+PROJECT_DIRS = . volume block ns
 
 .PHONEY: help all compile clean check format
 
@@ -30,6 +31,11 @@ compile:
 
 clean:
 	rm -rf $(GOPATH)/pkg $(GOPATH)/bin
+	for p in $(PROJECT_DIRS); do \
+		if [ -d "$$p/build" ] ; then \
+			rm -rf "$$p/build"; \
+		fi \
+	done
 
 realclean: clean
 	rm -rf ./vendor
