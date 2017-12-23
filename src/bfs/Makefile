@@ -1,6 +1,6 @@
 PROJECT = bfs
 GO = go
-PACKAGES = $(PROJECT)/volume $(PROJECT)/block $(PROJECT)/file
+PACKAGES = $(PROJECT)/volume $(PROJECT)/block
 
 .PHONEY: help all compile clean check format
 
