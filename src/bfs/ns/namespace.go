@@ -22,6 +22,13 @@ type Namespace struct {
 var defaultReadOpts *opt.ReadOptions = &opt.ReadOptions{}
 var defaultWriteOpts *opt.WriteOptions = &opt.WriteOptions{Sync: true}
 
+const (
+  // The initial size of the result buffer for List() operations. The result
+  // buffer holds pointers (*Entry) so the cost of over-allocating should be
+  // small.
+  LIST_ALLOC_SIZE = 1024
+)
+
 func New(dbPath string) *Namespace {
 	return &Namespace{
 		dbPath: dbPath,
@@ -95,7 +102,7 @@ func (this *Namespace) List(from string, to string) ([]*Entry, error) {
 	iter := this.db.NewIterator(r, defaultReadOpts)
 	defer iter.Release()
 
-	entries := make([]*Entry, 0)
+	entries := make([]*Entry, 0, LIST_ALLOC_SIZE)
 
 	for iter.Next() {
 		var blockIds []string
