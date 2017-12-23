@@ -17,7 +17,7 @@ func TestPhysicalVolume_Open(t *testing.T) {
 		pv := NewPhysicalVolume("build/test/" + t.Name())
 
 		if err := pv.Open(true); err != nil {
-			t.Error("Open failed for non-existant path - %v", err)
+			t.Fatal("Open failed for non-existant path - %v", err)
 		}
 
 		if err := pv.Close(); err != nil {
@@ -39,7 +39,7 @@ func TestPhysicalVolume_Open(t *testing.T) {
 		pv := NewPhysicalVolume("build/test/" + t.Name())
 
 		if err := pv.Open(false); err == nil {
-			t.Error("Open succeeded for non-existant path")
+			t.Fatal("Open succeeded for non-existant path")
 		}
 
 		// No call to pv.Close() because the volume shouldn't open.
@@ -52,6 +52,10 @@ func TestPhysicalVolume_Open(t *testing.T) {
 	t.Run("volume-is-file", func(t *testing.T) {
 		t.Parallel()
 
+		if err := os.MkdirAll("build/test/", 0700); err != nil {
+			t.Fatalf("Unable to create test directory - %v", err)
+		}
+
 		if f, err := os.OpenFile("build/test/"+t.Name(), os.O_CREATE|os.O_WRONLY, 0600); err != nil {
 			t.Fatalf("Failed to create test file - %v", err)
 			defer f.Close()
@@ -60,7 +64,7 @@ func TestPhysicalVolume_Open(t *testing.T) {
 		pv := NewPhysicalVolume("build/test/" + t.Name())
 
 		if err := pv.Open(false); err == nil {
-			t.Error("Open succeeded for volume at file")
+			t.Fatal("Open succeeded for volume at file")
 		} else {
 			t.Logf("Properly got %v", err)
 		}
@@ -80,7 +84,7 @@ func TestPhysicalVolume_StateTransitions(t *testing.T) {
 		pv := NewPhysicalVolume("build/test/" + t.Name())
 
 		if _, err := pv.ReaderFor("1"); err == nil {
-			t.Errorf("Created a reader on unopen volume")
+			t.Fatalf("Created a reader on unopen volume")
 		} else {
 			t.Logf("Properly got %v", err)
 		}
@@ -92,7 +96,7 @@ func TestPhysicalVolume_StateTransitions(t *testing.T) {
 		pv := NewPhysicalVolume("build/test/" + t.Name())
 
 		if _, err := pv.WriterFor("1"); err == nil {
-			t.Errorf("Created a writer on unopen volume")
+			t.Fatalf("Created a writer on unopen volume")
 		} else {
 			t.Logf("Properly got %v", err)
 		}
@@ -103,19 +107,19 @@ func TestPhysicalVolume_ReaderWriter(t *testing.T) {
 	pv := NewPhysicalVolume("build/test/" + t.Name())
 
 	if err := pv.Open(true); err != nil {
-		t.Error("Open failed for non-existant path - %v", err)
+		t.Fatal("Open failed for non-existant path - %v", err)
 	}
 
 	if writer, err := pv.WriterFor("1"); err == nil {
 		if _, err := io.WriteString(writer, "Test 1"); err != nil {
-			t.Errorf("Faled to write to new block - %v", err)
+			t.Fatalf("Faled to write to new block - %v", err)
 		}
 
 		if err := writer.Close(); err != nil {
-			t.Errorf("Failed to close writer - %v", err)
+			t.Fatalf("Failed to close writer - %v", err)
 		}
 	} else {
-		t.Errorf("Failed to create writer - %v", err)
+		t.Fatalf("Failed to create writer - %v", err)
 	}
 
 	if reader, err := pv.ReaderFor("1"); err == nil {
@@ -123,17 +127,17 @@ func TestPhysicalVolume_ReaderWriter(t *testing.T) {
 
 		if size, err := reader.Read(buffer); err == nil {
 			if string(buffer[:size]) != "Test 1" {
-				t.Errorf("Buffer not as expected: %v", string(buffer[:size]))
+				t.Fatalf("Buffer not as expected: %v", string(buffer[:size]))
 			}
 		} else {
-			t.Errorf("Failed to read from new block - %v", err)
+			t.Fatalf("Failed to read from new block - %v", err)
 		}
 
 		if err := reader.Close(); err != nil {
-			t.Errorf("Failed to close reader - %v", err)
+			t.Fatalf("Failed to close reader - %v", err)
 		}
 	} else {
-		t.Errorf("Failed to create reader - %v", err)
+		t.Fatalf("Failed to create reader - %v", err)
 	}
 
 	if err := pv.Close(); err != nil {
