@@ -23,10 +23,10 @@ var defaultReadOpts *opt.ReadOptions = &opt.ReadOptions{}
 var defaultWriteOpts *opt.WriteOptions = &opt.WriteOptions{Sync: true}
 
 const (
-  // The initial size of the result buffer for List() operations. The result
-  // buffer holds pointers (*Entry) so the cost of over-allocating should be
-  // small.
-  LIST_ALLOC_SIZE = 1024
+	// The initial size of the result buffer for List() operations. The result
+	// buffer holds pointers (*Entry) so the cost of over-allocating should be
+	// small.
+	LIST_ALLOC_SIZE = 1024
 )
 
 func New(dbPath string) *Namespace {
