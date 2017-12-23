@@ -30,7 +30,7 @@ clean:
 	rm -rf $(GOPATH)/pkg $(GOPATH)/bin
 
 check: compile
-	$(GO) test -v $(TEST_ARGS) $(PACKAGES)
+	$(GO) test $(TEST_ARGS) $(PACKAGES)
 
 format:
 	$(GO) fmt $(PACKAGES)
