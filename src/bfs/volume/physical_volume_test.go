@@ -52,7 +52,7 @@ func TestPhysicalVolume_Open(t *testing.T) {
 	t.Run("volume-is-file", func(t *testing.T) {
 		t.Parallel()
 
-		if err := os.MkdirAll("build/test/", 0700); err != nil {
+		if err := os.MkdirAll("build/test/TestPhysicalVolume_Open", 0700); err != nil {
 			t.Fatalf("Unable to create test directory - %v", err)
 		}
 
@@ -70,7 +70,7 @@ func TestPhysicalVolume_Open(t *testing.T) {
 
 		// No call to pv.Close() because the volume shouldn't open.
 
-		if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
+		if err := os.RemoveAll("build/test/TestPhysicalVolume_Open" + t.Name()); err != nil {
 			t.Fatalf("Failed to remove test file - %v", err)
 		}
 	})
