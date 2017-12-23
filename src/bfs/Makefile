@@ -1,5 +1,6 @@
 PROJECT = bfs
 GO = go
+DEP = dep
 PACKAGES = . $(PROJECT)/volume $(PROJECT)/block $(PROJECT)/ns
 
 .PHONEY: help all compile clean check format
@@ -24,10 +25,14 @@ help:
 all: compile check
 
 compile:
+	$(DEP) ensure
 	$(GO) install
 
 clean:
 	rm -rf $(GOPATH)/pkg $(GOPATH)/bin
+
+realclean: clean
+	rm -rf ./vendor
 
 check: compile
 	$(GO) test $(TEST_ARGS) $(PACKAGES) $(TEST_EXTRA_ARGS)
