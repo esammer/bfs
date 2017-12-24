@@ -14,8 +14,8 @@ type Entry struct {
 }
 
 type Namespace struct {
-	dbPath string
-	db     *leveldb.DB
+	path string
+	db   *leveldb.DB
 }
 
 // Default LevelDB read and write options.
@@ -29,20 +29,20 @@ const (
 	LIST_ALLOC_SIZE = 1024
 )
 
-func New(dbPath string) *Namespace {
+func New(path string) *Namespace {
 	return &Namespace{
-		dbPath: dbPath,
+		path: path,
 	}
 }
 
 func (this *Namespace) Open() error {
-	glog.V(1).Infof("Opening namespace at %v", this.dbPath)
+	glog.V(1).Infof("Opening namespace at %v", this.path)
 
 	options := &opt.Options{
 		ErrorIfMissing: false,
 	}
 
-	if db, err := leveldb.OpenFile(this.dbPath, options); err != nil {
+	if db, err := leveldb.OpenFile(this.path, options); err != nil {
 		return err
 	} else {
 		this.db = db
@@ -127,7 +127,7 @@ func (this *Namespace) List(from string, to string) ([]*Entry, error) {
 }
 
 func (this *Namespace) Close() error {
-	glog.V(1).Infof("Closing namespace at %v", this.dbPath)
+	glog.V(1).Infof("Closing namespace at %v", this.path)
 
 	return this.db.Close()
 }
