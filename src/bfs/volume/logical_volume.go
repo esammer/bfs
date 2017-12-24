@@ -63,13 +63,13 @@ func (this *Writer) Write(buffer []byte) (int, error) {
 		if bufferRemaining < (this.blockSize - this.blockPos) {
 			writeLen = bufferRemaining
 		} else {
-			writeLen = (this.blockSize - this.blockPos)
+			writeLen = this.blockSize - this.blockPos
 		}
 
 		if writeLen > 0 {
 			glog.V(2).Infof("Write %d:%d of %d bytes to %v", bufferPos, bufferPos+writeLen, len(buffer), this.filename)
 
-			if _, err := this.blockWriter.Write(buffer[bufferPos : bufferPos+writeLen]); err != nil {
+			if _, err := this.blockWriter.Write(buffer[bufferPos: bufferPos+writeLen]); err != nil {
 				return 0, err
 			}
 
@@ -77,8 +77,6 @@ func (this *Writer) Write(buffer []byte) (int, error) {
 			this.blockPos += writeLen
 			bufferPos += writeLen
 			bufferRemaining -= writeLen
-
-			//log.Printf("State bufferPos: %d bufferRemaining: %d blockPos: %d", bufferPos, bufferRemaining, this.blockPos)
 		}
 	}
 
