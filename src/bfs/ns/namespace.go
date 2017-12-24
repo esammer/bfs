@@ -36,6 +36,8 @@ func New(dbPath string) *Namespace {
 }
 
 func (this *Namespace) Open() error {
+	glog.V(1).Infof("Opening namespace at %v", this.dbPath)
+
 	options := &opt.Options{
 		ErrorIfMissing: false,
 	}
