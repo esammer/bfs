@@ -4,6 +4,9 @@ import (
 	"bfs/block"
 	"fmt"
 	"github.com/golang/glog"
+	"math/rand"
+	"os"
+	"time"
 )
 
 /*
@@ -12,25 +15,29 @@ import (
 
 type Writer struct {
 	fileSystem *FileSystem
-	lv         *LogicalVolume
+	volume     *LogicalVolume
 	blockSize  int
 	filename   string
 
 	filePos int
 
-	blockWriter block.BlockWriter
-	blockPos    int
-	blockCount  int
+	blockWriter     block.BlockWriter
+	blockPos        int
+	blockCount      int
+	blockList       []string
+	pvSelectionSeed int
 }
 
-func NewWriter(fs *FileSystem, lv *LogicalVolume, filename string, blockSize int) *Writer {
-	glog.V(2).Infof("Allocate writer for %v with blockSize %d on %#v", filename, blockSize, lv)
+func NewWriter(fs *FileSystem, volume *LogicalVolume, filename string, blockSize int) *Writer {
+	glog.V(2).Infof("Allocate writer for %v with blockSize %d on %#v", filename, blockSize, volume)
 
 	return &Writer{
-		fileSystem: fs,
-		lv:         lv,
-		blockSize:  blockSize,
-		filename:   filename,
+		fileSystem:      fs,
+		volume:          volume,
+		blockSize:       blockSize,
+		filename:        filename,
+		blockList:       make([]string, 0, 16),
+		pvSelectionSeed: rand.Int(),
 	}
 }
 
@@ -42,6 +49,15 @@ func (this *Writer) Write(buffer []byte) (int, error) {
 		writeLen := 0
 
 		if this.blockPos == this.blockSize || this.blockCount == 0 {
+			now := (time.Now().Unix() * 1000000000) + int64(time.Now().Nanosecond())
+			hostname, err := os.Hostname()
+
+			if err != nil {
+				return 0, err
+			}
+
+			blockId := fmt.Sprintf("%s-%d", hostname, now)
+			this.blockList = append(this.blockList, blockId)
 			this.blockCount++
 
 			if this.blockWriter != nil {
@@ -50,15 +66,15 @@ func (this *Writer) Write(buffer []byte) (int, error) {
 				}
 			}
 
-			pvIdx := this.blockCount % len(this.lv.volumes)
+			pvIdx := (this.blockCount + this.pvSelectionSeed) % len(this.volume.volumes)
 
-			if blockWriter, err := this.lv.volumes[pvIdx].WriterFor(fmt.Sprintf("%d", this.blockCount)); err == nil {
+			if blockWriter, err := this.volume.volumes[pvIdx].WriterFor(blockId); err == nil {
 				this.blockWriter = blockWriter
 			} else {
 				return 0, err
 			}
 
-			glog.V(1).Infof("Allocated block %d - old blockPos: %d filePos: %d", this.blockCount, this.blockPos, this.filePos)
+			glog.V(1).Infof("Allocated block %s - old blockPos: %d filePos: %d", blockId, this.blockPos, this.filePos)
 
 			this.blockPos = 0
 		}
@@ -87,16 +103,20 @@ func (this *Writer) Write(buffer []byte) (int, error) {
 }
 
 func (this *Writer) Close() error {
-	glog.V(1).Infof("Closing writer for file %v on volume %v.", this.filename, this.lv.Namespace)
-
-	var err error
+	glog.V(1).Infof("Closing writer for file %v on volume %v.", this.filename, this.volume.Namespace)
 
 	if this.blockWriter != nil {
-		err = this.blockWriter.Close()
+		if err := this.blockWriter.Close(); err != nil {
+			return err
+		}
 	}
 
-	glog.V(1).Infof("Closed writer for %s on %s. Wrote %d bytes to %d blocks", this.filename, this.lv.Namespace,
+	if err := this.fileSystem.Namespace.Add(this.filename, this.blockList); err != nil {
+		return err
+	}
+
+	glog.V(1).Infof("Closed writer for %s on %s. Wrote %d bytes to %d blocks", this.filename, this.volume.Namespace,
 		this.filePos, this.blockCount)
 
-	return err
+	return nil
 }
