@@ -51,6 +51,16 @@ func TestFileSystem(t *testing.T) {
 	err = writer.Close()
 	require.NoError(t, err)
 
+	writer, err = fs.OpenWrite("/txs/a.log", 4)
+	require.NoError(t, err)
+	require.NotNil(t, writer)
+
+	_, err = io.WriteString(writer, "Hello world 123 456")
+	require.NoError(t, err)
+
+	err = writer.Close()
+	require.NoError(t, err)
+
 	err = fs.Close()
 	require.NoError(t, err)
 
