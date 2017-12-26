@@ -24,8 +24,10 @@ func TestNamespace_Open(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, entry)
 	require.Equal(t, entry, &Entry{
-		Path:   "/a.txt",
-		Blocks: []string{"1", "2"},
+		Path:        "/a.txt",
+		Blocks:      []string{"1", "2"},
+		Permissions: 0,
+		Status:      FileStatus_Unknown,
 	})
 
 	entries, err := ns.List("/", "/z")
