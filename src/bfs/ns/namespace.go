@@ -49,7 +49,7 @@ const (
 	// The initial size of the result buffer for List() operations. The result
 	// buffer holds pointers (*Entry) so the cost of over-allocating should be
 	// small.
-	LIST_ALLOC_SIZE = 1024
+	listAllocSize = 1024
 
 	dbPrefix_Entry           = byte(1)
 	dbPrefix_GlobalMetadata  = byte(2)
@@ -174,7 +174,7 @@ func (this *Namespace) List(from string, to string) ([]*Entry, error) {
 	iter := this.db.NewIterator(r, defaultReadOpts)
 	defer iter.Release()
 
-	entries := make([]*Entry, 0, LIST_ALLOC_SIZE)
+	entries := make([]*Entry, 0, listAllocSize)
 
 	for iter.Next() {
 		var entry Entry
