@@ -8,9 +8,31 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
+type FileStatus uint8
+
+const (
+	FileStatus_Unknown           FileStatus = iota
+	FileStatus_UnderConstruction
+	FileStatus_OK
+	FileStatus_PendingDelete
+)
+
+var fileStatusStr = map[FileStatus]string{
+	FileStatus_Unknown:           "UNKNOWN",
+	FileStatus_UnderConstruction: "UNDER_CONSTRUCTION",
+	FileStatus_OK:                "OK",
+	FileStatus_PendingDelete:     "PENDING_DELETE",
+}
+
+func (this FileStatus) String() string {
+	return fileStatusStr[this]
+}
+
 type Entry struct {
-	Path   string
-	Blocks []string
+	Path        string
+	Blocks      []string
+	Permissions uint8
+	Status      FileStatus
 }
 
 type Namespace struct {
@@ -67,7 +89,14 @@ func (this *Namespace) Open() error {
 func (this *Namespace) Add(path string, blockIds []string) error {
 	glog.V(1).Infof("Adding entry %v blockIds: %v", path, blockIds)
 
-	if value, err := json.Marshal(blockIds); err != nil {
+	entry := &Entry{
+		Path:        path,
+		Blocks:      blockIds,
+		Permissions: 0,
+		Status:      FileStatus_Unknown,
+	}
+
+	if value, err := json.Marshal(entry); err != nil {
 		return err
 	} else {
 		return this.db.Put([]byte(path), value, defaultWriteOpts)
@@ -80,16 +109,13 @@ func (this *Namespace) Get(path string) (*Entry, error) {
 	if value, err := this.db.Get([]byte(path), defaultReadOpts); err != nil {
 		return nil, err
 	} else {
-		var blockIds []string
+		var entry Entry
 
-		if err := json.Unmarshal(value, &blockIds); err != nil {
+		if err := json.Unmarshal(value, &entry); err != nil {
 			return nil, err
 		}
 
-		return &Entry{
-			Path:   path,
-			Blocks: blockIds,
-		}, nil
+		return &entry, nil
 	}
 }
 
@@ -107,20 +133,15 @@ func (this *Namespace) List(from string, to string) ([]*Entry, error) {
 	entries := make([]*Entry, 0, LIST_ALLOC_SIZE)
 
 	for iter.Next() {
-		var blockIds []string
+		var entry Entry
 
-		if err := json.Unmarshal(iter.Value(), &blockIds); err != nil {
+		if err := json.Unmarshal(iter.Value(), &entry); err != nil {
 			return nil, err
-		}
-
-		entry := &Entry{
-			Path:   string(iter.Key()),
-			Blocks: blockIds,
 		}
 
 		glog.V(2).Infof("Entry: %#v", entry)
 
-		entries = append(entries, entry)
+		entries = append(entries, &entry)
 	}
 
 	return entries, nil
