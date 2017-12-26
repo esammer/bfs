@@ -1,10 +1,16 @@
 PROJECT = bfs
 GO = go
 DEP = dep
-PACKAGES = . $(PROJECT)/volume $(PROJECT)/block $(PROJECT)/ns
-PROJECT_DIRS = . volume block ns
+PACKAGES = . \
+	$(PROJECT)/volume \
+	$(PROJECT)/block \
+	$(PROJECT)/ns \
+	$(PROJECT)/nameservice \
+	$(PROJECT)/blockservice
+PROJECT_DIRS = . volume block ns nameservice blockservice
+PROTO_FILES = blockservice/blockservice.pb.go
 
-.PHONEY: help all compile clean check format
+.PHONY: help all compile clean check format generate generate-proto deps
 
 help:
 	@echo "Supported targets for $(PROJECT):\n\
@@ -17,7 +23,9 @@ help:
 	    help      display this help.\n\
 	\n\
 	  Developer:\n\
+	    deps      ensure/build required dependencies.\n\
 	    format    run $(GO) fmt on all source.\n\
+	    generate  generate required source files.\n\
 	"
 	@if test -z "$(GOPATH)"; then \
 		echo "***WARNING*** GOPATH is not set!"; \
@@ -25,9 +33,18 @@ help:
 
 all: compile check
 
-compile:
+deps:
 	$(DEP) ensure
+
+compile: deps generate-proto
 	$(GO) install
+
+check: compile
+	$(GO) test $(TEST_ARGS) $(PACKAGES) $(TEST_EXTRA_ARGS)
+
+generate: generate-proto
+
+generate-proto: $(PROTO_FILES)
 
 clean:
 	rm -rf $(GOPATH)/pkg $(GOPATH)/bin
@@ -39,10 +56,10 @@ clean:
 
 realclean: clean
 	rm -rf ./vendor
-
-check: compile
-	$(GO) test $(TEST_ARGS) $(PACKAGES) $(TEST_EXTRA_ARGS)
+	rm -rf $(PROTO_FILES)
 
 format:
 	$(GO) fmt $(PACKAGES)
 
+%.pb.go: %.proto
+	protoc $< --go_out=plugins=grpc:.
