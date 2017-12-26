@@ -32,6 +32,15 @@ func TestNamespace_Open(t *testing.T) {
 
 	entries, err := ns.List("/", "/z")
 	require.Len(t, entries, 3)
+	require.Equal(
+		t,
+		[]*Entry{
+			{Path: "/a.txt", Blocks: []string{"1", "2"}},
+			{Path: "/b.txt", Blocks: []string{"3", "4", "5", "6"}},
+			{Path: "/c.txt", Blocks: []string{}},
+		},
+		entries,
+	)
 	require.NoError(t, err)
 
 	err = ns.Close()

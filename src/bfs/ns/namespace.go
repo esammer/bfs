@@ -1,6 +1,7 @@
 package ns
 
 import (
+	"bytes"
 	"encoding/json"
 	"github.com/golang/glog"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -49,6 +50,11 @@ const (
 	// buffer holds pointers (*Entry) so the cost of over-allocating should be
 	// small.
 	LIST_ALLOC_SIZE = 1024
+
+	dbPrefix_Entry           = byte(1)
+	dbPrefix_GlobalMetadata  = byte(2)
+	dbPrefix_VolumeMetadata  = byte(3)
+	dbPrefix_BlockAssignment = byte(4)
 )
 
 func New(path string) *Namespace {
@@ -70,12 +76,20 @@ func (this *Namespace) Open() error {
 		this.db = db
 	}
 
-	if ok, err := this.db.Has([]byte("global/blockId"), defaultReadOpts); ok {
+	key := bytes.Join(
+		[][]byte{
+			{dbPrefix_GlobalMetadata},
+			[]byte("blockId"),
+		},
+		nil,
+	)
+
+	if ok, err := this.db.Has(key, defaultReadOpts); ok {
 		glog.V(1).Info("Last blockId exists")
 	} else if err != nil {
 		return err
 	} else {
-		if err := this.db.Put([]byte("global/blockId"), []byte{byte(0)}, defaultWriteOpts); err != nil {
+		if err := this.db.Put(key, []byte{byte(0)}, defaultWriteOpts); err != nil {
 			glog.Errorf("Failed to set initial blockId for the namespace - %v", err)
 			return err
 		} else {
@@ -99,14 +113,29 @@ func (this *Namespace) Add(path string, blockIds []string) error {
 	if value, err := json.Marshal(entry); err != nil {
 		return err
 	} else {
-		return this.db.Put([]byte(path), value, defaultWriteOpts)
+		key := bytes.Join(
+			[][]byte{
+				{dbPrefix_Entry},
+				[]byte(path),
+			},
+			nil,
+		)
+		return this.db.Put(key, value, defaultWriteOpts)
 	}
 }
 
 func (this *Namespace) Get(path string) (*Entry, error) {
 	glog.V(1).Infof("Getting entry %v", path)
 
-	if value, err := this.db.Get([]byte(path), defaultReadOpts); err != nil {
+	key := bytes.Join(
+		[][]byte{
+			{dbPrefix_Entry},
+			[]byte(path),
+		},
+		nil,
+	)
+
+	if value, err := this.db.Get(key, defaultReadOpts); err != nil {
 		return nil, err
 	} else {
 		var entry Entry
@@ -122,9 +151,24 @@ func (this *Namespace) Get(path string) (*Entry, error) {
 func (this *Namespace) List(from string, to string) ([]*Entry, error) {
 	glog.V(1).Infof("Listing entries from %v to %v", from, to)
 
+	startKey := bytes.Join(
+		[][]byte{
+			{dbPrefix_Entry},
+			[]byte(from),
+		},
+		nil,
+	)
+	endKey := bytes.Join(
+		[][]byte{
+			{dbPrefix_Entry},
+			[]byte(to),
+		},
+		nil,
+	)
+
 	r := &util.Range{
-		Start: []byte(from),
-		Limit: []byte(to),
+		Start: startKey,
+		Limit: endKey,
 	}
 
 	iter := this.db.NewIterator(r, defaultReadOpts)
