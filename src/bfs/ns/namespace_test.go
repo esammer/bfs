@@ -35,9 +35,9 @@ func TestNamespace_Open(t *testing.T) {
 	require.Equal(
 		t,
 		[]*Entry{
-			{Path: "/a.txt", Blocks: []string{"1", "2"}},
-			{Path: "/b.txt", Blocks: []string{"3", "4", "5", "6"}},
-			{Path: "/c.txt", Blocks: []string{}},
+			{Path: "/a.txt", Blocks: []string{"1", "2"}, Permissions: 0, Status: FileStatus_Unknown},
+			{Path: "/b.txt", Blocks: []string{"3", "4", "5", "6"}, Permissions: 0, Status: FileStatus_Unknown},
+			{Path: "/c.txt", Blocks: []string{}, Permissions: 0, Status: FileStatus_Unknown},
 		},
 		entries,
 	)
