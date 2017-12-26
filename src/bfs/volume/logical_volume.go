@@ -3,7 +3,6 @@ package volume
 import (
 	"fmt"
 	"github.com/golang/glog"
-
 )
 
 /*
@@ -50,14 +49,14 @@ func (this *LogicalVolume) Close() error {
 	return nil
 }
 
-func (this *LogicalVolume) WriterFor(filename string, blockSize int) (*Writer, error) {
+func (this *LogicalVolume) WriterFor(fs *FileSystem, filename string, blockSize int) (*Writer, error) {
 	if this.state != VOLUME_OPEN {
 		return nil, fmt.Errorf("Attempt to open writer from volume in state %v", this.state)
 	}
 
 	glog.V(1).Infof("Opening writer for %v with block size %v", filename, blockSize)
 
-	return NewWriter(this, filename, blockSize), nil
+	return NewWriter(fs, this, filename, blockSize), nil
 }
 
 func (this *LogicalVolume) ReaderFor(filename string) error {

@@ -11,9 +11,10 @@ import (
  */
 
 type Writer struct {
-	lv        *LogicalVolume
-	blockSize int
-	filename  string
+	fileSystem *FileSystem
+	lv         *LogicalVolume
+	blockSize  int
+	filename   string
 
 	filePos int
 
@@ -22,13 +23,14 @@ type Writer struct {
 	blockCount  int
 }
 
-func NewWriter(lv *LogicalVolume, filename string, blockSize int) *Writer {
+func NewWriter(fs *FileSystem, lv *LogicalVolume, filename string, blockSize int) *Writer {
 	glog.V(2).Infof("Allocate writer for %v with blockSize %d on %#v", filename, blockSize, lv)
 
 	return &Writer{
-		lv:        lv,
-		blockSize: blockSize,
-		filename:  filename,
+		fileSystem: fs,
+		lv:         lv,
+		blockSize:  blockSize,
+		filename:   filename,
 	}
 }
 
@@ -48,7 +50,9 @@ func (this *Writer) Write(buffer []byte) (int, error) {
 				}
 			}
 
-			if blockWriter, err := this.lv.volumes[0].WriterFor(fmt.Sprintf("%d", this.blockCount)); err == nil {
+			pvIdx := this.blockCount % len(this.lv.volumes)
+
+			if blockWriter, err := this.lv.volumes[pvIdx].WriterFor(fmt.Sprintf("%d", this.blockCount)); err == nil {
 				this.blockWriter = blockWriter
 			} else {
 				return 0, err
@@ -83,11 +87,16 @@ func (this *Writer) Write(buffer []byte) (int, error) {
 }
 
 func (this *Writer) Close() error {
-	glog.V(1).Infof("Closing writer for file %v on %#v", this.filename, this.lv)
+	glog.V(1).Infof("Closing writer for file %v on volume %v.", this.filename, this.lv.Namespace)
+
+	var err error
 
 	if this.blockWriter != nil {
-		return this.blockWriter.Close()
+		err = this.blockWriter.Close()
 	}
 
-	return nil
+	glog.V(1).Infof("Closed writer for %s on %s. Wrote %d bytes to %d blocks", this.filename, this.lv.Namespace,
+		this.filePos, this.blockCount)
+
+	return err
 }
