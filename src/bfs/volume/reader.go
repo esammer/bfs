@@ -2,17 +2,23 @@ package volume
 
 import (
 	"bfs/block"
+	"bfs/ns"
 	"github.com/golang/glog"
 	"io"
 )
 
 type Reader struct {
+	// Configuration
 	fileSystem *FileSystem
 	volume     *LogicalVolume
 	filename   string
 
-	blockReader *block.BlockReader
-	blockIdx    int
+	// Reader state
+	entry    *ns.Entry
+	blockIdx int
+
+	// Current block state
+	blockReader block.BlockReader
 }
 
 func NewReader(fileSystem *FileSystem, volume *LogicalVolume, path string) *Reader {
@@ -31,20 +37,69 @@ func (this *Reader) Open() error {
 		return err
 	}
 
+	// Set up reader state.
 	glog.Infof("Entry: %v", entry)
+	this.entry = entry
+
+	// Set up initial block state.
 	this.blockIdx = 0
 
 	return nil
 }
 
 func (this *Reader) Read(buffer []byte) (int, error) {
-	glog.Infof("Read up to %d", cap(buffer))
+	glog.Infof("Read up to %d bytes", len(buffer))
 
-	return 0, io.EOF
+	totalRead := 0
+
+	for totalRead < len(buffer) {
+		if this.blockReader == nil {
+			glog.Infof("Opening new reader for block %v", this.entry.Blocks[this.blockIdx])
+
+			for _, pv := range this.volume.volumes {
+				if pv.ID.String() == this.entry.Blocks[this.blockIdx].PVID {
+					glog.Infof("Read from pv %s", pv.ID.String())
+					reader, err := pv.ReaderFor(this.entry.Blocks[this.blockIdx].Block)
+					if err != nil {
+						return 0, err
+					}
+
+					this.blockReader = reader
+					break
+				}
+			}
+		}
+
+		amountRead, err := this.blockReader.Read(buffer[totalRead:])
+		totalRead += amountRead
+
+		glog.Infof("Read %d bytes from block, %d total, %d allowed, %v err", amountRead, totalRead, len(buffer), err)
+
+		if err != nil {
+			if err != io.EOF {
+				return totalRead, err
+			}
+
+			glog.Info("Hit end of block")
+			this.blockIdx++
+			this.blockReader = nil
+
+			if this.blockIdx >= len(this.entry.Blocks) {
+				glog.Info("No blocks left to read - EOF")
+				return totalRead, io.EOF
+			}
+		}
+	}
+
+	return totalRead, nil
 }
 
 func (this *Reader) Close() error {
 	glog.Infof("Closing reader for %s", this.filename)
+
+	if this.blockReader != nil {
+		return this.blockReader.Close()
+	}
 
 	return nil
 }

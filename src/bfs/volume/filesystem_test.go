@@ -2,6 +2,7 @@ package volume
 
 import (
 	"bfs/ns"
+	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 	"io"
 	"os"
@@ -58,10 +59,20 @@ func TestFileSystem(t *testing.T) {
 	err = reader.Open()
 	require.NoError(t, err)
 
-	buffer := make([]byte, 0, 128)
-	read, err := reader.Read(buffer)
-	require.EqualError(t, err, io.EOF.Error())
-	require.Equal(t, 0, read)
+	buffer := make([]byte, 16)
+
+	for {
+		read, err := reader.Read(buffer)
+		glog.Infof("Read %d bytes - %s - err %v", read, string(buffer[:read]), err)
+
+		if err != nil {
+			if err == io.EOF {
+				break
+			} else {
+				require.NoError(t, err)
+			}
+		}
+	}
 
 	err = reader.Close()
 	require.NoError(t, err)
