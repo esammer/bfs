@@ -60,7 +60,7 @@ func (this *LocalBlockWriter) Close() error {
 	if err := this.Writer.Close(); err == nil {
 		path := filepath.Join(this.RootPath, this.BlockId)
 
-		glog.V(1).Infof("Commiting block %v - move %v -> %v", this.BlockId, this.Writer.Name(), path)
+		glog.V(1).Infof("Committing block %v - move %v -> %v", this.BlockId, this.Writer.Name(), path)
 
 		if err := os.Rename(this.Writer.Name(), path); err == nil {
 			glog.V(2).Infof("Block %v committed", this.BlockId)
