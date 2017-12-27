@@ -43,44 +43,38 @@ func NewPhysicalVolume(rootPath string) *PhysicalVolume {
 func (this *PhysicalVolume) Open(allowInitialization bool) error {
 	glog.Infof("Open physical volume at %v", this.RootPath)
 
-	if this.state == VOLUME_INITIAL {
-		if info, err := os.Stat(this.RootPath); err == nil {
-			if info.IsDir() {
-				this.state = VOLUME_OPEN
-			} else {
-				return fmt.Errorf("Unable to open volume - %v is not a directory", this.RootPath)
-			}
-		} else {
-			if allowInitialization {
-				glog.Infof("Volume path %v does not exist - creating it.", this.RootPath)
-
-				// NB: This overrides err and simply returns it no matter what. See comment below.
-				if err = os.MkdirAll(this.RootPath, 0700); err == nil {
-					glog.Infof("Volume path created at %v", this.RootPath)
-					this.state = VOLUME_OPEN
-				}
-
-				id := uuid.NewRandom()
-				if err = ioutil.WriteFile(filepath.Join(this.RootPath, "id"), id, 0644); err != nil {
-					return err
-				}
-
-				glog.Infof("Generated volume ID: %v", id.String())
-			}
-
-			this.ID, err = ioutil.ReadFile(filepath.Join(this.RootPath, "id"))
-
-			/*
-			 * In the case allowInitialization is false, err is always the error encountered
-			 * while trying to open the volume. Otherwise, err will contain any error encountered
-			 * while making all directories in the volume path or nil if the operation was
-			 * successful. The usual caveats about `mkdir -p`-style operations atomicity apply.
-			 */
-			return err
-		}
-	} else {
+	if this.state != VOLUME_INITIAL {
 		return fmt.Errorf("Can not open volume from state %v", this.state)
 	}
+
+	if info, err := os.Stat(this.RootPath); err == nil {
+		if !info.IsDir() {
+			return fmt.Errorf("Unable to open volume - %v is not a directory", this.RootPath)
+		}
+	} else if allowInitialization {
+		glog.Infof("Volume path %v does not exist - creating it.", this.RootPath)
+
+		if err := os.MkdirAll(this.RootPath, 0700); err == nil {
+			glog.Infof("Volume path created at %v", this.RootPath)
+		}
+
+		id := uuid.NewRandom()
+		if err := ioutil.WriteFile(filepath.Join(this.RootPath, "id"), id, 0644); err != nil {
+			return err
+		}
+
+		glog.Infof("Generated volume ID: %v", id.String())
+	}
+
+	id, err := ioutil.ReadFile(filepath.Join(this.RootPath, "id"))
+	if err != nil {
+		return err
+	}
+
+	this.ID = id
+	this.state = VOLUME_OPEN
+
+	glog.Infof("Opened physical volume %s at %s", this.ID, this.RootPath)
 
 	return nil
 }
