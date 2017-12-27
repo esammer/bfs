@@ -2,6 +2,7 @@ package volume
 
 import (
 	"bfs/block"
+	"bfs/ns"
 	"fmt"
 	"github.com/golang/glog"
 	"math/rand"
@@ -24,7 +25,7 @@ type Writer struct {
 	blockWriter     block.BlockWriter
 	blockPos        int
 	blockCount      int
-	blockList       []string
+	blockList       []*ns.BlockMetadata
 	pvSelectionSeed int
 }
 
@@ -36,7 +37,7 @@ func NewWriter(fs *FileSystem, volume *LogicalVolume, filename string, blockSize
 		volume:          volume,
 		blockSize:       blockSize,
 		filename:        filename,
-		blockList:       make([]string, 0, 16),
+		blockList:       make([]*ns.BlockMetadata, 0, 16),
 		pvSelectionSeed: rand.Int(),
 	}
 }
@@ -57,7 +58,6 @@ func (this *Writer) Write(buffer []byte) (int, error) {
 			}
 
 			blockId := fmt.Sprintf("%s-%d", hostname, now)
-			this.blockList = append(this.blockList, blockId)
 			this.blockCount++
 
 			if this.blockWriter != nil {
@@ -67,8 +67,16 @@ func (this *Writer) Write(buffer []byte) (int, error) {
 			}
 
 			pvIdx := (this.blockCount + this.pvSelectionSeed) % len(this.volume.volumes)
+			pv := this.volume.volumes[pvIdx]
+			blockMetadata := &ns.BlockMetadata{
+				Block:  blockId,
+				PVID:   pv.ID.String(),
+				LVName: this.volume.Namespace,
+			}
 
-			if blockWriter, err := this.volume.volumes[pvIdx].WriterFor(blockId); err == nil {
+			this.blockList = append(this.blockList, blockMetadata)
+
+			if blockWriter, err := pv.WriterFor(blockId); err == nil {
 				this.blockWriter = blockWriter
 			} else {
 				return 0, err
@@ -111,7 +119,14 @@ func (this *Writer) Close() error {
 		}
 	}
 
-	if err := this.fileSystem.Namespace.Add(this.filename, this.blockList); err != nil {
+	entry := &ns.Entry{
+		VolumeName: this.volume.Namespace,
+		Path:       this.filename,
+		Blocks:     this.blockList,
+		Status:     ns.FileStatus_OK,
+	}
+
+	if err := this.fileSystem.Namespace.Add(entry); err != nil {
 		return err
 	}
 

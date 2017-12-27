@@ -59,12 +59,12 @@ func (this *LogicalVolume) WriterFor(fs *FileSystem, filename string, blockSize 
 	return NewWriter(fs, this, filename, blockSize), nil
 }
 
-func (this *LogicalVolume) ReaderFor(filename string) error {
+func (this *LogicalVolume) ReaderFor(fs *FileSystem, filename string) (*Reader, error) {
 	if this.state != VOLUME_OPEN {
-		return fmt.Errorf("Attempt to open reader from volume in state %v", this.state)
+		return nil, fmt.Errorf("Attempt to open reader from volume in state %v", this.state)
 	}
 
 	glog.V(1).Infof("Opening reader for %v", filename)
 
-	return nil
+	return NewReader(fs, this, filename), nil
 }

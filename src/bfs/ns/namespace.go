@@ -30,10 +30,17 @@ func (this FileStatus) String() string {
 }
 
 type Entry struct {
+	VolumeName  string
 	Path        string
-	Blocks      []string
+	Blocks      []*BlockMetadata
 	Permissions uint8
 	Status      FileStatus
+}
+
+type BlockMetadata struct {
+	Block  string
+	LVName string
+	PVID   string
 }
 
 type Namespace struct {
@@ -100,28 +107,50 @@ func (this *Namespace) Open() error {
 	return nil
 }
 
-func (this *Namespace) Add(path string, blockIds []string) error {
-	glog.V(1).Infof("Adding entry %v blockIds: %v", path, blockIds)
+func (this *Namespace) Add(entry *Entry) error {
+	glog.V(1).Infof("Adding entry %#v", entry)
 
-	entry := &Entry{
-		Path:        path,
-		Blocks:      blockIds,
-		Permissions: 0,
-		Status:      FileStatus_Unknown,
+	value, err := json.Marshal(entry)
+
+	if err != nil {
+		return err
 	}
 
-	if value, err := json.Marshal(entry); err != nil {
+	key := bytes.Join(
+		[][]byte{
+			{dbPrefix_Entry},
+			[]byte(entry.Path),
+		},
+		nil,
+	)
+
+	glog.V(2).Infof("Serialized to entry: %v", string(value))
+
+	if err = this.db.Put(key, value, defaultWriteOpts); err != nil {
 		return err
-	} else {
+	}
+
+	for _, blockMetadata := range entry.Blocks {
 		key := bytes.Join(
 			[][]byte{
-				{dbPrefix_Entry},
-				[]byte(path),
+				{dbPrefix_BlockAssignment},
+				[]byte(blockMetadata.Block),
 			},
 			nil,
 		)
-		return this.db.Put(key, value, defaultWriteOpts)
+
+		value, err := json.Marshal(blockMetadata)
+		if err != nil {
+			return err
+		}
+
+		glog.Infof("Serialized block %v", string(value))
+		if err := this.db.Put(key, value, defaultWriteOpts); err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 func (this *Namespace) Get(path string) (*Entry, error) {

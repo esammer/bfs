@@ -13,19 +13,43 @@ func TestNamespace_Open(t *testing.T) {
 	err := ns.Open()
 	require.NoError(t, err, "Open failed")
 
-	err = ns.Add("/a.txt", []string{"1", "2"})
+	err = ns.Add(
+		&Entry{
+			VolumeName: "/",
+			Path:       "/a.txt",
+			Blocks: []*BlockMetadata{
+				{Block: "1", LVName: "/", PVID: "1"},
+				{Block: "2", LVName: "/", PVID: "1"},
+			},
+		},
+	)
 	require.NoError(t, err)
-	err = ns.Add("/b.txt", []string{"3", "4", "5", "6"})
+	err = ns.Add(
+		&Entry{
+			VolumeName: "/",
+			Path:       "/b.txt",
+			Blocks: []*BlockMetadata{
+				{Block: "3", LVName: "/", PVID: "1"},
+				{Block: "4", LVName: "/", PVID: "1"},
+				{Block: "5", LVName: "/", PVID: "1"},
+				{Block: "6", LVName: "/", PVID: "1"},
+			},
+		},
+	)
 	require.NoError(t, err)
-	err = ns.Add("/c.txt", []string{})
+	err = ns.Add(&Entry{VolumeName: "/", Path: "/c.txt", Blocks: []*BlockMetadata{}})
 	require.NoError(t, err)
 
 	entry, err := ns.Get("/a.txt")
 	require.NoError(t, err)
 	require.NotNil(t, entry)
 	require.Equal(t, entry, &Entry{
-		Path:        "/a.txt",
-		Blocks:      []string{"1", "2"},
+		VolumeName: "/",
+		Path:       "/a.txt",
+		Blocks: []*BlockMetadata{
+			{Block: "1", LVName: "/", PVID: "1"},
+			{Block: "2", LVName: "/", PVID: "1"},
+		},
 		Permissions: 0,
 		Status:      FileStatus_Unknown,
 	})
@@ -35,9 +59,17 @@ func TestNamespace_Open(t *testing.T) {
 	require.Equal(
 		t,
 		[]*Entry{
-			{Path: "/a.txt", Blocks: []string{"1", "2"}, Permissions: 0, Status: FileStatus_Unknown},
-			{Path: "/b.txt", Blocks: []string{"3", "4", "5", "6"}, Permissions: 0, Status: FileStatus_Unknown},
-			{Path: "/c.txt", Blocks: []string{}, Permissions: 0, Status: FileStatus_Unknown},
+			{VolumeName: "/", Path: "/a.txt", Blocks: []*BlockMetadata{
+				{Block: "1", LVName: "/", PVID: "1"},
+				{Block: "2", LVName: "/", PVID: "1"},
+			}, Permissions: 0, Status: FileStatus_Unknown},
+			{VolumeName: "/", Path: "/b.txt", Blocks: []*BlockMetadata{
+				{Block: "3", LVName: "/", PVID: "1"},
+				{Block: "4", LVName: "/", PVID: "1"},
+				{Block: "5", LVName: "/", PVID: "1"},
+				{Block: "6", LVName: "/", PVID: "1"},
+			}, Permissions: 0, Status: FileStatus_Unknown},
+			{VolumeName: "/", Path: "/c.txt", Blocks: []*BlockMetadata{}, Permissions: 0, Status: FileStatus_Unknown},
 		},
 		entries,
 	)

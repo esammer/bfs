@@ -22,7 +22,7 @@ func main() {
 	lv.Open()
 
 	for i := 1; i <= 3; i++ {
-		if writer, err := lv.WriterFor("/hello.txt", 8); err != nil {
+		if writer, err := lv.WriterFor(nil, "/hello.txt", 8); err != nil {
 			glog.Fatalf("Unable to open writer - %v", err)
 		} else {
 			io.WriteString(writer, "Hello world. How do you do?")

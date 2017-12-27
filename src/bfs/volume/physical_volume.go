@@ -4,7 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang/glog"
+	"github.com/pborman/uuid"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 
 	"bfs/block"
 )
@@ -14,6 +17,7 @@ import (
  */
 
 type PhysicalVolume struct {
+	ID       uuid.UUID
 	RootPath string
 
 	state VolumeState
@@ -52,10 +56,19 @@ func (this *PhysicalVolume) Open(allowInitialization bool) error {
 
 				// NB: This overrides err and simply returns it no matter what. See comment below.
 				if err = os.MkdirAll(this.RootPath, 0700); err == nil {
-					glog.Infof("Volme path created at %v", this.RootPath)
+					glog.Infof("Volume path created at %v", this.RootPath)
 					this.state = VOLUME_OPEN
 				}
+
+				id := uuid.NewRandom()
+				if err = ioutil.WriteFile(filepath.Join(this.RootPath, "id"), id, 0644); err != nil {
+					return err
+				}
+
+				glog.Infof("Generated volume ID: %v", id.String())
 			}
+
+			this.ID, err = ioutil.ReadFile(filepath.Join(this.RootPath, "id"))
 
 			/*
 			 * In the case allowInitialization is false, err is always the error encountered
