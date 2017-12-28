@@ -62,9 +62,7 @@ func TestLogicalVolume_ReaderWriter(t *testing.T) {
 		t.Fatalf("Failed to close physical volume - %v", err)
 	}
 
-	/*
-		if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
-			t.Fatalf("Failed to remove test directory - %v", err)
-		}
-	*/
+	if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
+		t.Fatalf("Failed to remove test directory - %v", err)
+	}
 }
