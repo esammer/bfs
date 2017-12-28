@@ -15,7 +15,7 @@ import (
  */
 
 type Writer struct {
-	fileSystem *FileSystem
+	fileSystem *LocalFileSystem
 	volume     *LogicalVolume
 	blockSize  int
 	filename   string
@@ -29,7 +29,7 @@ type Writer struct {
 	pvSelectionSeed int
 }
 
-func NewWriter(fs *FileSystem, volume *LogicalVolume, filename string, blockSize int) *Writer {
+func NewWriter(fs *LocalFileSystem, volume *LogicalVolume, filename string, blockSize int) *Writer {
 	glog.V(2).Infof("Allocate writer for %v with blockSize %d on %#v", filename, blockSize, volume)
 
 	return &Writer{

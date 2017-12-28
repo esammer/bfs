@@ -30,7 +30,7 @@ func TestFileSystem(t *testing.T) {
 	lv1 := NewLogicalVolume("/logs", []*PhysicalVolume{pv1, pv2})
 	lv2 := NewLogicalVolume("/txs", []*PhysicalVolume{pv3})
 
-	fs := &FileSystem{
+	fs := &LocalFileSystem{
 		Namespace: ns.New(filepath.Join(testDir, "ns")),
 		Volumes:   []*LogicalVolume{lv1, lv2},
 	}

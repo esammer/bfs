@@ -9,7 +9,7 @@ import (
 
 type Reader struct {
 	// Configuration
-	fileSystem *FileSystem
+	fileSystem *LocalFileSystem
 	volume     *LogicalVolume
 	filename   string
 
@@ -21,7 +21,7 @@ type Reader struct {
 	blockReader block.BlockReader
 }
 
-func NewReader(fileSystem *FileSystem, volume *LogicalVolume, path string) *Reader {
+func NewReader(fileSystem *LocalFileSystem, volume *LogicalVolume, path string) *Reader {
 	return &Reader{
 		fileSystem: fileSystem,
 		volume:     volume,
