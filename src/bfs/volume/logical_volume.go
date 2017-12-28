@@ -49,7 +49,7 @@ func (this *LogicalVolume) Close() error {
 	return nil
 }
 
-func (this *LogicalVolume) WriterFor(fs *LocalFileSystem, filename string, blockSize int) (*Writer, error) {
+func (this *LogicalVolume) WriterFor(fs FileSystem, filename string, blockSize int) (*LocalFileWriter, error) {
 	if this.state != VOLUME_OPEN {
 		return nil, fmt.Errorf("Attempt to open writer from volume in state %v", this.state)
 	}
@@ -59,7 +59,7 @@ func (this *LogicalVolume) WriterFor(fs *LocalFileSystem, filename string, block
 	return NewWriter(fs, this, filename, blockSize), nil
 }
 
-func (this *LogicalVolume) ReaderFor(fs *LocalFileSystem, filename string) (*Reader, error) {
+func (this *LogicalVolume) ReaderFor(fs *LocalFileSystem, filename string) (*LocalFileReader, error) {
 	if this.state != VOLUME_OPEN {
 		return nil, fmt.Errorf("Attempt to open reader from volume in state %v", this.state)
 	}

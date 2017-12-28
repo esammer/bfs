@@ -5,17 +5,23 @@ import (
 	"bfs/ns"
 	"fmt"
 	"github.com/golang/glog"
+	"io"
 	"math/rand"
 	"os"
 	"time"
 )
 
 /*
- * Writer
+ * LocalFileWriter
  */
 
-type Writer struct {
-	fileSystem *LocalFileSystem
+type Writer interface {
+	io.Writer
+	io.Closer
+}
+
+type LocalFileWriter struct {
+	fileSystem FileSystem
 	volume     *LogicalVolume
 	blockSize  int
 	filename   string
@@ -29,10 +35,10 @@ type Writer struct {
 	pvSelectionSeed int
 }
 
-func NewWriter(fs *LocalFileSystem, volume *LogicalVolume, filename string, blockSize int) *Writer {
+func NewWriter(fs FileSystem, volume *LogicalVolume, filename string, blockSize int) *LocalFileWriter {
 	glog.V(2).Infof("Allocate writer for %v with blockSize %d on %#v", filename, blockSize, volume)
 
-	return &Writer{
+	return &LocalFileWriter{
 		fileSystem:      fs,
 		volume:          volume,
 		blockSize:       blockSize,
@@ -42,7 +48,7 @@ func NewWriter(fs *LocalFileSystem, volume *LogicalVolume, filename string, bloc
 	}
 }
 
-func (this *Writer) Write(buffer []byte) (int, error) {
+func (this *LocalFileWriter) Write(buffer []byte) (int, error) {
 	bufferPos := 0
 	bufferRemaining := len(buffer)
 
@@ -110,7 +116,7 @@ func (this *Writer) Write(buffer []byte) (int, error) {
 	return 0, nil
 }
 
-func (this *Writer) Close() error {
+func (this *LocalFileWriter) Close() error {
 	glog.V(1).Infof("Closing writer for file %v on volume %v.", this.filename, this.volume.Namespace)
 
 	if this.blockWriter != nil {
@@ -126,8 +132,10 @@ func (this *Writer) Close() error {
 		Status:     ns.FileStatus_OK,
 	}
 
-	if err := this.fileSystem.Namespace.Add(entry); err != nil {
-		return err
+	if val, ok := this.fileSystem.(*LocalFileSystem); ok {
+		if err := val.Namespace.Add(entry); err != nil {
+			return err
+		}
 	}
 
 	glog.V(1).Infof("Closed writer for %s on %s. Wrote %d bytes to %d blocks", this.filename, this.volume.Namespace,

@@ -40,7 +40,7 @@ func TestLogicalVolume_ReaderWriter(t *testing.T) {
 		t.Fatalf("Failed to create test directory - %v", err)
 	}
 
-	if writer, err := lv.WriterFor(nil, "test1.txt", 1024*1024); err == nil {
+	if writer, err := lv.WriterFor(new(MockFileSystem), "test1.txt", 1024*1024); err == nil {
 		for i := 0; i < 1000000; i++ {
 			if _, err := io.WriteString(writer, fmt.Sprintf("Test %d\n", i)); err != nil {
 				t.Fatalf("Failed to write to writer - %v", err)

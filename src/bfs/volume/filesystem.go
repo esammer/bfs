@@ -11,8 +11,8 @@ type FileSystem interface {
 	Open() error
 	Close() error
 
-	OpenRead(path string) (*Reader, error)
-	OpenWrite(path string, blockSize int) (*Writer, error)
+	OpenRead(path string) (Reader, error)
+	OpenWrite(path string, blockSize int) (Writer, error)
 }
 
 type LocalFileSystem struct {
@@ -56,7 +56,7 @@ func (this *LocalFileSystem) Close() error {
 	return nil
 }
 
-func (this *LocalFileSystem) OpenWrite(path string, blockSize int) (*Writer, error) {
+func (this *LocalFileSystem) OpenWrite(path string, blockSize int) (Writer, error) {
 	glog.V(1).Infof("Opening %v for write", path)
 
 	selectedLv, err := this.selectLogicalVolume(path)
@@ -67,7 +67,7 @@ func (this *LocalFileSystem) OpenWrite(path string, blockSize int) (*Writer, err
 	return selectedLv.WriterFor(this, path, blockSize)
 }
 
-func (this *LocalFileSystem) OpenRead(path string) (*Reader, error) {
+func (this *LocalFileSystem) OpenRead(path string) (Reader, error) {
 	glog.V(1).Infof("Opening %v for read", path)
 
 	selectedLv, err := this.selectLogicalVolume(path)

@@ -7,7 +7,14 @@ import (
 	"io"
 )
 
-type Reader struct {
+type Reader interface {
+	io.Reader
+	io.Closer
+
+	Open() error
+}
+
+type LocalFileReader struct {
 	// Configuration
 	fileSystem *LocalFileSystem
 	volume     *LogicalVolume
@@ -21,15 +28,15 @@ type Reader struct {
 	blockReader block.BlockReader
 }
 
-func NewReader(fileSystem *LocalFileSystem, volume *LogicalVolume, path string) *Reader {
-	return &Reader{
+func NewReader(fileSystem *LocalFileSystem, volume *LogicalVolume, path string) *LocalFileReader {
+	return &LocalFileReader{
 		fileSystem: fileSystem,
 		volume:     volume,
 		filename:   path,
 	}
 }
 
-func (this *Reader) Open() error {
+func (this *LocalFileReader) Open() error {
 	glog.V(1).Infof("Opening reader for %s", this.filename)
 
 	entry, err := this.fileSystem.Namespace.Get(this.filename)
@@ -47,7 +54,7 @@ func (this *Reader) Open() error {
 	return nil
 }
 
-func (this *Reader) Read(buffer []byte) (int, error) {
+func (this *LocalFileReader) Read(buffer []byte) (int, error) {
 	glog.V(2).Infof("Read up to %d bytes", len(buffer))
 
 	totalRead := 0
@@ -94,7 +101,7 @@ func (this *Reader) Read(buffer []byte) (int, error) {
 	return totalRead, nil
 }
 
-func (this *Reader) Close() error {
+func (this *LocalFileReader) Close() error {
 	glog.V(1).Infof("Closing reader for %s", this.filename)
 
 	if this.blockReader != nil {
