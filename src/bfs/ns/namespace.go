@@ -144,7 +144,7 @@ func (this *Namespace) Add(entry *Entry) error {
 			return err
 		}
 
-		glog.Infof("Serialized block %v", string(value))
+		glog.V(2).Infof("Serialized block %v", string(value))
 		if err := this.db.Put(key, value, defaultWriteOpts); err != nil {
 			return err
 		}

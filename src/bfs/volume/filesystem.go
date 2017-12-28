@@ -49,7 +49,7 @@ func (this *FileSystem) Close() error {
 }
 
 func (this *FileSystem) OpenWrite(path string, blockSize int) (*Writer, error) {
-	glog.Infof("Opening %v for write", path)
+	glog.V(1).Infof("Opening %v for write", path)
 
 	selectedLv, err := this.selectLogicalVolume(path)
 	if err != nil {
@@ -60,6 +60,8 @@ func (this *FileSystem) OpenWrite(path string, blockSize int) (*Writer, error) {
 }
 
 func (this *FileSystem) OpenRead(path string) (*Reader, error) {
+	glog.V(1).Infof("Opening %v for read", path)
+
 	selectedLv, err := this.selectLogicalVolume(path)
 	if err != nil {
 		return nil, err
@@ -71,7 +73,7 @@ func (this *FileSystem) OpenRead(path string) (*Reader, error) {
 func (this *FileSystem) selectLogicalVolume(path string) (*LogicalVolume, error) {
 	for _, lv := range this.Volumes {
 		if strings.HasPrefix(path, lv.Namespace) {
-			glog.Infof("Select volume %v for file %v", lv.Namespace, path)
+			glog.V(2).Infof("Select volume %v for file %v", lv.Namespace, path)
 			return lv, nil
 		}
 	}

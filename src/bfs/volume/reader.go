@@ -30,7 +30,7 @@ func NewReader(fileSystem *FileSystem, volume *LogicalVolume, path string) *Read
 }
 
 func (this *Reader) Open() error {
-	glog.Infof("Opening reader for %s", this.filename)
+	glog.V(1).Infof("Opening reader for %s", this.filename)
 
 	entry, err := this.fileSystem.Namespace.Get(this.filename)
 	if err != nil {
@@ -38,7 +38,7 @@ func (this *Reader) Open() error {
 	}
 
 	// Set up reader state.
-	glog.Infof("Entry: %v", entry)
+	glog.V(2).Infof("Entry: %v", entry)
 	this.entry = entry
 
 	// Set up initial block state.
@@ -48,17 +48,17 @@ func (this *Reader) Open() error {
 }
 
 func (this *Reader) Read(buffer []byte) (int, error) {
-	glog.Infof("Read up to %d bytes", len(buffer))
+	glog.V(2).Infof("Read up to %d bytes", len(buffer))
 
 	totalRead := 0
 
 	for totalRead < len(buffer) {
 		if this.blockReader == nil {
-			glog.Infof("Opening new reader for block %v", this.entry.Blocks[this.blockIdx])
+			glog.V(2).Infof("Opening new reader for block %v", this.entry.Blocks[this.blockIdx])
 
 			for _, pv := range this.volume.volumes {
 				if pv.ID.String() == this.entry.Blocks[this.blockIdx].PVID {
-					glog.Infof("Read from pv %s", pv.ID.String())
+					glog.V(2).Infof("Read from pv %s", pv.ID.String())
 					reader, err := pv.ReaderFor(this.entry.Blocks[this.blockIdx].Block)
 					if err != nil {
 						return 0, err
@@ -73,19 +73,19 @@ func (this *Reader) Read(buffer []byte) (int, error) {
 		amountRead, err := this.blockReader.Read(buffer[totalRead:])
 		totalRead += amountRead
 
-		glog.Infof("Read %d bytes from block, %d total, %d allowed, %v err", amountRead, totalRead, len(buffer), err)
+		glog.V(2).Infof("Read %d bytes from block, %d total, %d allowed, %v err", amountRead, totalRead, len(buffer), err)
 
 		if err != nil {
 			if err != io.EOF {
 				return totalRead, err
 			}
 
-			glog.Info("Hit end of block")
+			glog.V(2).Info("Hit end of block")
 			this.blockIdx++
 			this.blockReader = nil
 
 			if this.blockIdx >= len(this.entry.Blocks) {
-				glog.Info("No blocks left to read - EOF")
+				glog.V(2).Info("No blocks left to read - EOF")
 				return totalRead, io.EOF
 			}
 		}
@@ -95,7 +95,7 @@ func (this *Reader) Read(buffer []byte) (int, error) {
 }
 
 func (this *Reader) Close() error {
-	glog.Infof("Closing reader for %s", this.filename)
+	glog.V(1).Infof("Closing reader for %s", this.filename)
 
 	if this.blockReader != nil {
 		return this.blockReader.Close()
