@@ -2,6 +2,7 @@ package volume
 
 import (
 	"bfs/ns"
+	"bytes"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 	"io"
@@ -9,6 +10,59 @@ import (
 	"path/filepath"
 	"testing"
 )
+
+func BenchmarkFileSystem_Write(b *testing.B) {
+	glog.Info("Starting write benchmark")
+
+	testDir := filepath.Join("build/test", b.Name())
+	err := os.MkdirAll(testDir, 0700)
+	require.NoError(b, err)
+
+	pv1 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv1"))
+	err = pv1.Open(true)
+	require.NoError(b, err)
+
+	pv2 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv2"))
+	err = pv2.Open(true)
+	require.NoError(b, err)
+
+	lv1 := NewLogicalVolume("/logs", []*PhysicalVolume{pv1, pv2})
+
+	fs := &LocalFileSystem{
+		Namespace: ns.New(filepath.Join(testDir, "ns")),
+		Volumes:   []*LogicalVolume{lv1},
+	}
+
+	err = fs.Open()
+	require.NoError(b, err)
+
+	sourceBuf := bytes.Repeat([]byte{0}, 1024*1024)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		writer, err := fs.OpenWrite("/logs/a.log", 1024*1024)
+		require.NoError(b, err)
+
+		for j := 0; j < 10; j++ {
+			_, err = writer.Write(sourceBuf)
+			require.NoError(b, err)
+		}
+
+		err = writer.Close()
+		require.NoError(b, err)
+	}
+
+	b.StopTimer()
+
+	err = fs.Close()
+	require.NoError(b, err)
+
+	err = os.RemoveAll(testDir)
+	require.NoError(b, err)
+
+	glog.Info("Ending write benchmark")
+}
 
 func TestFileSystem(t *testing.T) {
 	testDir := filepath.Join("build/test", t.Name())
