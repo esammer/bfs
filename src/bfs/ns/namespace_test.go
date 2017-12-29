@@ -1,6 +1,7 @@
 package ns
 
 import (
+	"bytes"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 	"os"
@@ -82,4 +83,20 @@ func TestNamespace_Open(t *testing.T) {
 
 	err = os.RemoveAll("build/test/" + t.Name())
 	require.NoError(t, err)
+}
+
+func TestNamespace_keyFor(t *testing.T) {
+	key := keyFor(dbPrefix_Entry, "a")
+	require.NotNil(t, key)
+
+	require.Equal(
+		t,
+		bytes.Join([][]byte{
+			{dbPrefix_Entry},
+			[]byte("a"),
+		},
+			nil,
+		),
+		key,
+	)
 }

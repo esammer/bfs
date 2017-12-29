@@ -83,13 +83,7 @@ func (this *Namespace) Open() error {
 		this.db = db
 	}
 
-	key := bytes.Join(
-		[][]byte{
-			{dbPrefix_GlobalMetadata},
-			[]byte("blockId"),
-		},
-		nil,
-	)
+	key := keyFor(dbPrefix_GlobalMetadata, "blockId")
 
 	if ok, err := this.db.Has(key, defaultReadOpts); ok {
 		glog.V(1).Info("Last blockId exists")
@@ -116,13 +110,7 @@ func (this *Namespace) Add(entry *Entry) error {
 		return err
 	}
 
-	key := bytes.Join(
-		[][]byte{
-			{dbPrefix_Entry},
-			[]byte(entry.Path),
-		},
-		nil,
-	)
+	key := keyFor(dbPrefix_Entry, entry.Path)
 
 	glog.V(2).Infof("Serialized to entry: %v", string(value))
 
@@ -131,13 +119,7 @@ func (this *Namespace) Add(entry *Entry) error {
 	}
 
 	for _, blockMetadata := range entry.Blocks {
-		key := bytes.Join(
-			[][]byte{
-				{dbPrefix_BlockAssignment},
-				[]byte(blockMetadata.Block),
-			},
-			nil,
-		)
+		key := keyFor(dbPrefix_BlockAssignment, blockMetadata.Block)
 
 		value, err := json.Marshal(blockMetadata)
 		if err != nil {
@@ -156,13 +138,7 @@ func (this *Namespace) Add(entry *Entry) error {
 func (this *Namespace) Get(path string) (*Entry, error) {
 	glog.V(1).Infof("Getting entry %v", path)
 
-	key := bytes.Join(
-		[][]byte{
-			{dbPrefix_Entry},
-			[]byte(path),
-		},
-		nil,
-	)
+	key := keyFor(dbPrefix_Entry, path)
 
 	if value, err := this.db.Get(key, defaultReadOpts); err != nil {
 		return nil, err
@@ -180,20 +156,8 @@ func (this *Namespace) Get(path string) (*Entry, error) {
 func (this *Namespace) List(from string, to string) ([]*Entry, error) {
 	glog.V(1).Infof("Listing entries from %v to %v", from, to)
 
-	startKey := bytes.Join(
-		[][]byte{
-			{dbPrefix_Entry},
-			[]byte(from),
-		},
-		nil,
-	)
-	endKey := bytes.Join(
-		[][]byte{
-			{dbPrefix_Entry},
-			[]byte(to),
-		},
-		nil,
-	)
+	startKey := keyFor(dbPrefix_Entry, from)
+	endKey := keyFor(dbPrefix_Entry, to)
 
 	r := &util.Range{
 		Start: startKey,
@@ -224,4 +188,14 @@ func (this *Namespace) Close() error {
 	glog.V(1).Infof("Closing namespace at %v", this.path)
 
 	return this.db.Close()
+}
+
+func keyFor(table byte, key string) []byte {
+	return bytes.Join(
+		[][]byte{
+			{table},
+			[]byte(key),
+		},
+		nil,
+	)
 }
