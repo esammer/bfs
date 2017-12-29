@@ -18,15 +18,15 @@ const (
 	FileStatus_PendingDelete
 )
 
-var fileStatusStr = map[FileStatus]string{
-	FileStatus_Unknown:           "UNKNOWN",
-	FileStatus_UnderConstruction: "UNDER_CONSTRUCTION",
-	FileStatus_OK:                "OK",
-	FileStatus_PendingDelete:     "PENDING_DELETE",
+var fileStatusStr = []string{
+	"UNKNOWN",
+	"UNDER_CONSTRUCTION",
+	"OK",
+	"PENDING_DELETE",
 }
 
-func (this FileStatus) String() string {
-	return fileStatusStr[this]
+func (this *FileStatus) String() string {
+	return fileStatusStr[*this]
 }
 
 type Entry struct {
