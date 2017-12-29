@@ -26,24 +26,34 @@ type PhysicalVolume struct {
 type VolumeState int
 
 const (
-	VOLUME_INITIAL VolumeState = iota
-	VOLUME_CLOSED
-	VOLUME_OPEN
+	VolumeState_Initial VolumeState = iota
+	VolumeState_Closed
+	VolumeState_Open
 )
+
+var volumeStateStr = []string{
+	"INITIAL",
+	"CLOSED",
+	"OPEN",
+}
+
+func (this *VolumeState) String() string {
+	return volumeStateStr[*this]
+}
 
 func NewPhysicalVolume(rootPath string) *PhysicalVolume {
 	glog.V(1).Infof("Create physical volume at %v", rootPath)
 
 	return &PhysicalVolume{
 		RootPath: rootPath,
-		state:    VOLUME_INITIAL,
+		state:    VolumeState_Initial,
 	}
 }
 
 func (this *PhysicalVolume) Open(allowInitialization bool) error {
 	glog.Infof("Open physical volume at %v", this.RootPath)
 
-	if this.state != VOLUME_INITIAL {
+	if this.state != VolumeState_Initial {
 		return fmt.Errorf("Can not open volume from state %v", this.state)
 	}
 
@@ -72,7 +82,7 @@ func (this *PhysicalVolume) Open(allowInitialization bool) error {
 	}
 
 	this.ID = id
-	this.state = VOLUME_OPEN
+	this.state = VolumeState_Open
 
 	glog.Infof("Opened physical volume %s at %s", this.ID, this.RootPath)
 
@@ -82,8 +92,8 @@ func (this *PhysicalVolume) Open(allowInitialization bool) error {
 func (this *PhysicalVolume) Close() error {
 	glog.Infof("Close physical volume at %v", this.RootPath)
 
-	if this.state == VOLUME_OPEN {
-		this.state = VOLUME_CLOSED
+	if this.state == VolumeState_Open {
+		this.state = VolumeState_Closed
 	} else {
 		return errors.New("Can not close unopened volume!")
 	}
@@ -92,7 +102,7 @@ func (this *PhysicalVolume) Close() error {
 }
 
 func (this *PhysicalVolume) ReaderFor(blockId string) (block.BlockReader, error) {
-	if this.state != VOLUME_OPEN {
+	if this.state != VolumeState_Open {
 		return nil, fmt.Errorf("Can not create block reader on volume in state %v", this.state)
 	}
 
@@ -100,7 +110,7 @@ func (this *PhysicalVolume) ReaderFor(blockId string) (block.BlockReader, error)
 }
 
 func (this *PhysicalVolume) WriterFor(blockId string) (block.BlockWriter, error) {
-	if this.state != VOLUME_OPEN {
+	if this.state != VolumeState_Open {
 		return nil, fmt.Errorf("Can not create block writer on volume in state %v", this.state)
 	}
 
