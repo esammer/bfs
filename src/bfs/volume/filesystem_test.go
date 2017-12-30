@@ -3,11 +3,11 @@ package volume
 import (
 	"bfs/block"
 	"bfs/ns"
+	"bfs/test"
 	"bytes"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 	"io"
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -31,22 +31,22 @@ func BenchmarkFileSystem_Write(b *testing.B) {
 		glog.Info("Response loop ended")
 	}()
 
-	testDir := filepath.Join("build/test", b.Name())
-	err := os.MkdirAll(testDir, 0700)
+	testDir := test.New("build", "test", b.Name())
+	err := testDir.Create()
 	require.NoError(b, err)
 
-	pv1 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv1"), eventChannel)
+	pv1 := NewPhysicalVolume(filepath.Join(testDir.Path, "data", "pv1"), eventChannel)
 	err = pv1.Open(true)
 	require.NoError(b, err)
 
-	pv2 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv2"), eventChannel)
+	pv2 := NewPhysicalVolume(filepath.Join(testDir.Path, "data", "pv2"), eventChannel)
 	err = pv2.Open(true)
 	require.NoError(b, err)
 
 	lv1 := NewLogicalVolume("/logs", []*PhysicalVolume{pv1, pv2}, eventChannel)
 
 	fs := &LocalFileSystem{
-		Namespace:    ns.New(filepath.Join(testDir, "ns")),
+		Namespace:    ns.New(filepath.Join(testDir.Path, "ns")),
 		Volumes:      []*LogicalVolume{lv1},
 		EventChannel: eventChannel,
 	}
@@ -78,15 +78,15 @@ func BenchmarkFileSystem_Write(b *testing.B) {
 	err = fs.Close()
 	require.NoError(b, err)
 
-	err = os.RemoveAll(testDir)
+	err = testDir.Destroy()
 	require.NoError(b, err)
 
 	glog.Info("Ending write benchmark")
 }
 
 func TestFileSystem(t *testing.T) {
-	testDir := filepath.Join("build/test", t.Name())
-	err := os.MkdirAll(testDir, 0700)
+	testDir := test.New("build", "test", t.Name())
+	err := testDir.Create()
 	require.NoError(t, err)
 
 	eventChannel := make(chan interface{}, 1024)
@@ -105,15 +105,15 @@ func TestFileSystem(t *testing.T) {
 		glog.Info("Response loop ended")
 	}()
 
-	pv1 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv1"), eventChannel)
+	pv1 := NewPhysicalVolume(filepath.Join(testDir.Path, "data", "pv1"), eventChannel)
 	err = pv1.Open(true)
 	require.NoError(t, err)
 
-	pv2 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv2"), eventChannel)
+	pv2 := NewPhysicalVolume(filepath.Join(testDir.Path, "data", "pv2"), eventChannel)
 	err = pv2.Open(true)
 	require.NoError(t, err)
 
-	pv3 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv3"), eventChannel)
+	pv3 := NewPhysicalVolume(filepath.Join(testDir.Path, "data", "pv3"), eventChannel)
 	err = pv3.Open(true)
 	require.NoError(t, err)
 
@@ -121,7 +121,7 @@ func TestFileSystem(t *testing.T) {
 	lv2 := NewLogicalVolume("/txs", []*PhysicalVolume{pv3}, eventChannel)
 
 	fs := &LocalFileSystem{
-		Namespace: ns.New(filepath.Join(testDir, "ns")),
+		Namespace: ns.New(filepath.Join(testDir.Path, "ns")),
 		Volumes:   []*LogicalVolume{lv1, lv2},
 	}
 
@@ -182,6 +182,6 @@ func TestFileSystem(t *testing.T) {
 
 	close(eventChannel)
 
-	err = os.RemoveAll(testDir)
+	err = testDir.Destroy()
 	require.NoError(t, err)
 }

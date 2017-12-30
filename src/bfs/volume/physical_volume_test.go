@@ -2,91 +2,88 @@ package volume
 
 import (
 	"bfs/block"
+	"bfs/test"
 	"github.com/golang/glog"
+	"github.com/stretchr/testify/require"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
 func TestPhysicalVolume_Open(t *testing.T) {
 	t.Run("autoInitialize=true", func(t *testing.T) {
-		t.Parallel()
+		//t.Parallel()
 
-		if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
-			t.Fatalf("Failed to remove temp directory - %v", err)
-		}
+		testDir := test.New("build", "test", t.Name())
+		err := testDir.Create()
+		require.NoError(t, err)
 
 		eventChannel := make(chan interface{}, 1024)
 
-		pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
+		pv := NewPhysicalVolume(filepath.Join(testDir.Path, "pv1"), eventChannel)
 
-		if err := pv.Open(true); err != nil {
-			t.Fatal("Open failed for non-existant path - %v", err)
-		}
+		err = pv.Open(true)
+		require.NoError(t, err, "Open failed for non-existant path - %v", err)
 
-		if err := pv.Close(); err != nil {
-			t.Fatalf("Failed to close volume - %v", err)
-		}
+		err = pv.Close()
+		require.NoError(t, err, "Failed to close volume - %v", err)
 
 		close(eventChannel)
 
-		if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
-			t.Fatalf("Failed to remove temp directory - %v", err)
-		}
+		err = testDir.Destroy()
+		require.NoError(t, err)
 	})
 
 	t.Run("autoInitialize=false", func(t *testing.T) {
-		t.Parallel()
+		//t.Parallel()
 
-		if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
-			t.Fatalf("Failed to remove temp directory - %v", err)
-		}
+		testDir := test.New("build", "test", t.Name())
+		err := testDir.Create()
+		require.NoError(t, err)
 
 		eventChannel := make(chan interface{}, 1024)
 
-		pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
+		pv := NewPhysicalVolume(filepath.Join(testDir.Path, "pv1"), eventChannel)
 
-		if err := pv.Open(false); err == nil {
-			t.Fatal("Open succeeded for non-existant path")
-		}
+		err = pv.Open(false)
+		require.Error(t, err, "Open succeeded for non-existent path")
 
 		// No call to pv.Close() because the volume shouldn't open.
 
 		close(eventChannel)
 
-		if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
-			t.Fatalf("Failed to remove temp directory - %v", err)
-		}
+		err = testDir.Destroy()
+		require.NoError(t, err)
 	})
 
 	t.Run("volume-is-file", func(t *testing.T) {
-		t.Parallel()
+		//t.Parallel()
 
-		if err := os.MkdirAll("build/test/TestPhysicalVolume_Open", 0700); err != nil {
-			t.Fatalf("Unable to create test directory - %v", err)
-		}
+		testDir := test.New("build", "test", "TestPhysicalVolume_Open")
+		err := testDir.Create()
+		require.NoError(t, err)
+
+		filePath := filepath.Join(testDir.BaseDir, t.Name())
 
 		eventChannel := make(chan interface{}, 1024)
 
-		pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
+		pv := NewPhysicalVolume(filePath, eventChannel)
 
-		if err := pv.Open(false); err == nil {
-			t.Fatal("Open succeeded for volume at file")
-		}
+		f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0600)
+		require.NoError(t, err, "Failed to create test file - %v", err)
+		err = f.Close()
+		require.NoError(t, err)
 
-		if f, err := os.OpenFile("build/test/"+t.Name(), os.O_CREATE|os.O_WRONLY, 0600); err != nil {
-			t.Fatalf("Failed to create test file - %v", err)
-		} else {
-			f.Close()
-		}
+		err = pv.Open(false)
+		require.Error(t, err, "Open succeeded for volume at file")
 
 		// No call to pv.Close() because the volume shouldn't open.
 
 		close(eventChannel)
 
-		if err := os.RemoveAll("build/test/TestPhysicalVolume_Open" + t.Name()); err != nil {
-			t.Fatalf("Failed to remove test file - %v", err)
-		}
+		err = testDir.Destroy()
+		require.NoError(t, err)
 	})
 }
 
@@ -96,11 +93,10 @@ func TestPhysicalVolume_StateTransitions(t *testing.T) {
 
 		eventChannel := make(chan interface{}, 1024)
 
-		pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
+		pv := NewPhysicalVolume(filepath.Join("build", "test", t.Name()), eventChannel)
 
-		if _, err := pv.ReaderFor("1"); err == nil {
-			t.Fatalf("Created a reader on unopen volume")
-		}
+		_, err := pv.ReaderFor("1")
+		require.Error(t, err, "Created a reader on unopen volume")
 	})
 
 	t.Run("new-writer", func(t *testing.T) {
@@ -110,9 +106,8 @@ func TestPhysicalVolume_StateTransitions(t *testing.T) {
 
 		pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
 
-		if _, err := pv.WriterFor("1"); err == nil {
-			t.Fatalf("Created a writer on unopen volume")
-		}
+		_, err := pv.WriterFor("1")
+		require.Error(t, err, "Created a writer on unopen volume")
 
 		close(eventChannel)
 	})
@@ -135,49 +130,44 @@ func TestPhysicalVolume_ReaderWriter(t *testing.T) {
 		glog.Info("Response loop ended")
 	}()
 
-	pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
+	testDir := test.New("build", "test", t.Name())
+	err := testDir.Create()
+	require.NoError(t, err)
 
-	if err := pv.Open(true); err != nil {
-		t.Fatal("Open failed for non-existant path - %v", err)
+	pv := NewPhysicalVolume(testDir.Path, eventChannel)
+
+	err = pv.Open(true)
+	require.NoError(t, err, "Open failed for non-existent path - %v", err)
+
+	writer, err := pv.WriterFor("1")
+	require.NoError(t, err)
+
+	_, err = io.WriteString(writer, "Test 1")
+	require.NoError(t, err)
+
+	err = writer.Close()
+	require.NoError(t, err, "Failed to close writer - %v", err)
+
+	reader, err := pv.ReaderFor("1")
+	require.NoError(t, err, "Failed to create reader - %v", err)
+
+	buffer := make([]byte, 16)
+
+	size, err := reader.Read(buffer)
+	require.NoError(t, err, "Failed to read from new block - %v", err)
+
+	if string(buffer[:size]) != "Test 1" {
+		t.Fatalf("Buffer not as expected: %v", string(buffer[:size]))
 	}
 
-	if writer, err := pv.WriterFor("1"); err == nil {
-		if _, err := io.WriteString(writer, "Test 1"); err != nil {
-			t.Fatalf("Faled to write to new block - %v", err)
-		}
+	err = reader.Close()
+	require.NoError(t, err, "Failed to close reader - %v", err)
 
-		if err := writer.Close(); err != nil {
-			t.Fatalf("Failed to close writer - %v", err)
-		}
-	} else {
-		t.Fatalf("Failed to create writer - %v", err)
-	}
-
-	if reader, err := pv.ReaderFor("1"); err == nil {
-		buffer := make([]byte, 16)
-
-		if size, err := reader.Read(buffer); err == nil {
-			if string(buffer[:size]) != "Test 1" {
-				t.Fatalf("Buffer not as expected: %v", string(buffer[:size]))
-			}
-		} else {
-			t.Fatalf("Failed to read from new block - %v", err)
-		}
-
-		if err := reader.Close(); err != nil {
-			t.Fatalf("Failed to close reader - %v", err)
-		}
-	} else {
-		t.Fatalf("Failed to create reader - %v", err)
-	}
-
-	if err := pv.Close(); err != nil {
-		t.Fatalf("Failed to close volume - %v", err)
-	}
+	err = pv.Close()
+	require.NoError(t, err, "Failed to close volume - %v", err)
 
 	close(eventChannel)
 
-	if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
-		t.Fatalf("Failed to remove test directory - %v", err)
-	}
+	err = testDir.Destroy()
+	require.NoError(t, err)
 }

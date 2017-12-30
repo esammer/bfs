@@ -2,10 +2,12 @@ package volume
 
 import (
 	"bfs/block"
+	"bfs/test"
 	"fmt"
 	"github.com/golang/glog"
+	"github.com/stretchr/testify/require"
 	"io"
-	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -14,77 +16,67 @@ func TestLogicalVolume_OpenClose(t *testing.T) {
 
 	lv := NewLogicalVolume("/", nil, eventChannel)
 
-	if err := lv.Open(); err != nil {
-		t.Fatalf("Failed to open volume - %v", err)
-	}
+	err := lv.Open()
+	require.NoError(t, err)
 
-	if err := lv.Close(); err != nil {
-		t.Fatalf("Failed to close volume - %v", err)
-	}
+	err = lv.Close()
+	require.NoError(t, err)
 }
 
 func TestLogicalVolume_ReaderWriter(t *testing.T) {
-	if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
-		t.Fatalf("Failed to remove test directory - %v", err)
-	}
+	testDir := test.New("build", "test", t.Name())
+	err := testDir.Create()
+	require.NoError(t, err)
 
 	eventChannel := make(chan interface{}, 1024)
 
 	go func() {
 		for event := range eventChannel {
-			glog.Infof("Received event %v", event)
+			glog.Infof("Received event %#v", event)
 
 			switch val := event.(type) {
 			case *block.BlockWriteEvent:
 				val.AckChannel <- event
 				glog.Infof("Acknowledged block write %v", val)
+			case *FileWriteEvent:
+				// Ignore file write events.
+			default:
+				require.Fail(t, "Received unknown event", "Event was: %v", event)
 			}
 		}
 
 		glog.Info("Response loop ended")
 	}()
 
-	pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
+	pv := NewPhysicalVolume(filepath.Join(testDir.Path, "pv1"), eventChannel)
 
-	if err := pv.Open(true); err != nil {
-		t.Fatalf("Failed to open physical volume - %v", err)
-	}
+	err = pv.Open(true)
+	require.NoError(t, err, "Failed to open physical volume - %v", err)
 
 	lv := NewLogicalVolume("/", []*PhysicalVolume{pv}, eventChannel)
 
-	if err := lv.Open(); err != nil {
-		t.Fatalf("Failed to open volume - %v", err)
+	err = lv.Open()
+	require.NoError(t, err, "Failed to open volume - %v", err)
+
+	writer, err := lv.WriterFor(new(MockFileSystem), "test1.txt", 1024*1024)
+	require.NoError(t, err, "Unable to open writer - %v", err)
+
+	for i := 0; i < 1000000; i++ {
+		_, err := io.WriteString(writer, fmt.Sprintf("Test %d\n", i))
+		require.NoError(t, err, "Failed to write to writer - %v", err)
 	}
 
-	if err := os.MkdirAll("build/test/"+t.Name(), 0700); err != nil {
-		t.Fatalf("Failed to create test directory - %v", err)
-	}
+	err = writer.Close()
+	require.NoError(t, err, "Failed to close writer - %v", err)
 
-	if writer, err := lv.WriterFor(new(MockFileSystem), "test1.txt", 1024*1024); err == nil {
-		for i := 0; i < 1000000; i++ {
-			if _, err := io.WriteString(writer, fmt.Sprintf("Test %d\n", i)); err != nil {
-				t.Fatalf("Failed to write to writer - %v", err)
-			}
-		}
+	err = lv.Close()
+	require.NoError(t, err, "Failed to close volume - %v", err)
 
-		if err := writer.Close(); err != nil {
-			t.Fatalf("Failed to close writer - %v", err)
-		}
-	} else {
-		t.Fatalf("Unable to open writer - %v", err)
-	}
-
-	if err := lv.Close(); err != nil {
-		t.Fatalf("Failed to close volume - %v", err)
-	}
-
-	if err := pv.Close(); err != nil {
-		t.Fatalf("Failed to close physical volume - %v", err)
-	}
+	err = pv.Close()
+	require.NoError(t, err, "Failed to close physical volume - %v", err)
 
 	close(eventChannel)
 
-	if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
-		t.Fatalf("Failed to remove test directory - %v", err)
-	}
+	err = testDir.Destroy()
+	require.NoError(t, err)
 }

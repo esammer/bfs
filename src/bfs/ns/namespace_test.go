@@ -1,17 +1,22 @@
 package ns
 
 import (
+	"bfs/test"
 	"bytes"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
-	"os"
+	"path/filepath"
 	"testing"
 )
 
 func TestNamespace_Open(t *testing.T) {
-	ns := New("build/test/" + t.Name() + "/db")
+	testDir := test.New("build", "test", t.Name())
+	err := testDir.Create()
+	require.NoError(t, err)
 
-	err := ns.Open()
+	ns := New(filepath.Join(testDir.Path, "/db"))
+
+	err = ns.Open()
 	require.NoError(t, err, "Open failed")
 
 	err = ns.Add(
@@ -81,7 +86,7 @@ func TestNamespace_Open(t *testing.T) {
 
 	glog.Flush()
 
-	err = os.RemoveAll("build/test/" + t.Name())
+	err = testDir.Destroy()
 	require.NoError(t, err)
 }
 
