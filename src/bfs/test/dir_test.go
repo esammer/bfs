@@ -1,6 +1,7 @@
 package test
 
 import (
+	_ "github.com/golang/glog" // Force flag initialization. Gross.
 	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
