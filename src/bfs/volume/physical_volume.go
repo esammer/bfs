@@ -17,8 +17,9 @@ import (
  */
 
 type PhysicalVolume struct {
-	ID       uuid.UUID
-	RootPath string
+	ID           uuid.UUID
+	RootPath     string
+	eventChannel chan interface{}
 
 	state VolumeState
 }
@@ -41,12 +42,13 @@ func (this *VolumeState) String() string {
 	return volumeStateStr[*this]
 }
 
-func NewPhysicalVolume(rootPath string) *PhysicalVolume {
+func NewPhysicalVolume(rootPath string, eventChannel chan interface{}) *PhysicalVolume {
 	glog.V(1).Infof("Create physical volume at %v", rootPath)
 
 	return &PhysicalVolume{
-		RootPath: rootPath,
-		state:    VolumeState_Initial,
+		RootPath:     rootPath,
+		eventChannel: eventChannel,
+		state:        VolumeState_Initial,
 	}
 }
 
@@ -114,5 +116,5 @@ func (this *PhysicalVolume) WriterFor(blockId string) (block.BlockWriter, error)
 		return nil, fmt.Errorf("Can not create block writer on volume in state %v", this.state)
 	}
 
-	return block.NewWriter(this.RootPath, blockId)
+	return block.NewWriter(this.RootPath, blockId, this.eventChannel)
 }

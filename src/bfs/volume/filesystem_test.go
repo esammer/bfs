@@ -1,6 +1,7 @@
 package volume
 
 import (
+	"bfs/block"
 	"bfs/ns"
 	"bytes"
 	"github.com/golang/glog"
@@ -14,23 +15,40 @@ import (
 func BenchmarkFileSystem_Write(b *testing.B) {
 	glog.Info("Starting write benchmark")
 
+	eventChannel := make(chan interface{}, 1024)
+
+	go func() {
+		for event := range eventChannel {
+			glog.Infof("Received event %v", event)
+
+			switch val := event.(type) {
+			case *block.BlockWriteEvent:
+				val.AckChannel <- event
+				glog.Infof("Acknowledged block write %v", val)
+			}
+		}
+
+		glog.Info("Response loop ended")
+	}()
+
 	testDir := filepath.Join("build/test", b.Name())
 	err := os.MkdirAll(testDir, 0700)
 	require.NoError(b, err)
 
-	pv1 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv1"))
+	pv1 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv1"), eventChannel)
 	err = pv1.Open(true)
 	require.NoError(b, err)
 
-	pv2 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv2"))
+	pv2 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv2"), eventChannel)
 	err = pv2.Open(true)
 	require.NoError(b, err)
 
-	lv1 := NewLogicalVolume("/logs", []*PhysicalVolume{pv1, pv2})
+	lv1 := NewLogicalVolume("/logs", []*PhysicalVolume{pv1, pv2}, eventChannel)
 
 	fs := &LocalFileSystem{
-		Namespace: ns.New(filepath.Join(testDir, "ns")),
-		Volumes:   []*LogicalVolume{lv1},
+		Namespace:    ns.New(filepath.Join(testDir, "ns")),
+		Volumes:      []*LogicalVolume{lv1},
+		EventChannel: eventChannel,
 	}
 
 	err = fs.Open()
@@ -55,6 +73,8 @@ func BenchmarkFileSystem_Write(b *testing.B) {
 
 	b.StopTimer()
 
+	close(eventChannel)
+
 	err = fs.Close()
 	require.NoError(b, err)
 
@@ -69,20 +89,36 @@ func TestFileSystem(t *testing.T) {
 	err := os.MkdirAll(testDir, 0700)
 	require.NoError(t, err)
 
-	pv1 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv1"))
+	eventChannel := make(chan interface{}, 1024)
+
+	go func() {
+		for event := range eventChannel {
+			glog.Infof("Received event %v", event)
+
+			switch val := event.(type) {
+			case *block.BlockWriteEvent:
+				val.AckChannel <- event
+				glog.Infof("Acknowledged block write %v", val)
+			}
+		}
+
+		glog.Info("Response loop ended")
+	}()
+
+	pv1 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv1"), eventChannel)
 	err = pv1.Open(true)
 	require.NoError(t, err)
 
-	pv2 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv2"))
+	pv2 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv2"), eventChannel)
 	err = pv2.Open(true)
 	require.NoError(t, err)
 
-	pv3 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv3"))
+	pv3 := NewPhysicalVolume(filepath.Join(testDir, "data", "pv3"), eventChannel)
 	err = pv3.Open(true)
 	require.NoError(t, err)
 
-	lv1 := NewLogicalVolume("/logs", []*PhysicalVolume{pv1, pv2})
-	lv2 := NewLogicalVolume("/txs", []*PhysicalVolume{pv3})
+	lv1 := NewLogicalVolume("/logs", []*PhysicalVolume{pv1, pv2}, eventChannel)
+	lv2 := NewLogicalVolume("/txs", []*PhysicalVolume{pv3}, eventChannel)
 
 	fs := &LocalFileSystem{
 		Namespace: ns.New(filepath.Join(testDir, "ns")),
@@ -143,6 +179,8 @@ func TestFileSystem(t *testing.T) {
 
 	err = fs.Close()
 	require.NoError(t, err)
+
+	close(eventChannel)
 
 	err = os.RemoveAll(testDir)
 	require.NoError(t, err)

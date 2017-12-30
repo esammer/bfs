@@ -11,13 +11,15 @@ import (
 func main() {
 	flag.Parse()
 
-	pv := volume.NewPhysicalVolume("tmp/1")
+	eventsChannel := make(chan interface{}, 1024)
+
+	pv := volume.NewPhysicalVolume("tmp/1", eventsChannel)
 
 	if err := pv.Open(true); err != nil {
 		glog.Fatalf("Unable to open volume - %v", err)
 	}
 
-	lv := volume.NewLogicalVolume("/", []*volume.PhysicalVolume{pv})
+	lv := volume.NewLogicalVolume("/", []*volume.PhysicalVolume{pv}, eventsChannel)
 
 	lv.Open()
 

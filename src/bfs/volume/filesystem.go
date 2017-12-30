@@ -16,8 +16,9 @@ type FileSystem interface {
 }
 
 type LocalFileSystem struct {
-	Namespace *ns.Namespace
-	Volumes   []*LogicalVolume
+	Namespace    *ns.Namespace
+	Volumes      []*LogicalVolume
+	EventChannel chan interface{}
 }
 
 func (this *LocalFileSystem) Open() error {

@@ -1,6 +1,8 @@
 package volume
 
 import (
+	"bfs/block"
+	"github.com/golang/glog"
 	"io"
 	"os"
 	"testing"
@@ -14,7 +16,9 @@ func TestPhysicalVolume_Open(t *testing.T) {
 			t.Fatalf("Failed to remove temp directory - %v", err)
 		}
 
-		pv := NewPhysicalVolume("build/test/" + t.Name())
+		eventChannel := make(chan interface{}, 1024)
+
+		pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
 
 		if err := pv.Open(true); err != nil {
 			t.Fatal("Open failed for non-existant path - %v", err)
@@ -23,6 +27,8 @@ func TestPhysicalVolume_Open(t *testing.T) {
 		if err := pv.Close(); err != nil {
 			t.Fatalf("Failed to close volume - %v", err)
 		}
+
+		close(eventChannel)
 
 		if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
 			t.Fatalf("Failed to remove temp directory - %v", err)
@@ -36,13 +42,17 @@ func TestPhysicalVolume_Open(t *testing.T) {
 			t.Fatalf("Failed to remove temp directory - %v", err)
 		}
 
-		pv := NewPhysicalVolume("build/test/" + t.Name())
+		eventChannel := make(chan interface{}, 1024)
+
+		pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
 
 		if err := pv.Open(false); err == nil {
 			t.Fatal("Open succeeded for non-existant path")
 		}
 
 		// No call to pv.Close() because the volume shouldn't open.
+
+		close(eventChannel)
 
 		if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
 			t.Fatalf("Failed to remove temp directory - %v", err)
@@ -56,19 +66,23 @@ func TestPhysicalVolume_Open(t *testing.T) {
 			t.Fatalf("Unable to create test directory - %v", err)
 		}
 
+		eventChannel := make(chan interface{}, 1024)
+
+		pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
+
+		if err := pv.Open(false); err == nil {
+			t.Fatal("Open succeeded for volume at file")
+		}
+
 		if f, err := os.OpenFile("build/test/"+t.Name(), os.O_CREATE|os.O_WRONLY, 0600); err != nil {
 			t.Fatalf("Failed to create test file - %v", err)
 		} else {
 			f.Close()
 		}
 
-		pv := NewPhysicalVolume("build/test/" + t.Name())
-
-		if err := pv.Open(false); err == nil {
-			t.Fatal("Open succeeded for volume at file")
-		}
-
 		// No call to pv.Close() because the volume shouldn't open.
+
+		close(eventChannel)
 
 		if err := os.RemoveAll("build/test/TestPhysicalVolume_Open" + t.Name()); err != nil {
 			t.Fatalf("Failed to remove test file - %v", err)
@@ -80,7 +94,9 @@ func TestPhysicalVolume_StateTransitions(t *testing.T) {
 	t.Run("new-reader", func(t *testing.T) {
 		t.Parallel()
 
-		pv := NewPhysicalVolume("build/test/" + t.Name())
+		eventChannel := make(chan interface{}, 1024)
+
+		pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
 
 		if _, err := pv.ReaderFor("1"); err == nil {
 			t.Fatalf("Created a reader on unopen volume")
@@ -90,16 +106,36 @@ func TestPhysicalVolume_StateTransitions(t *testing.T) {
 	t.Run("new-writer", func(t *testing.T) {
 		t.Parallel()
 
-		pv := NewPhysicalVolume("build/test/" + t.Name())
+		eventChannel := make(chan interface{}, 1024)
+
+		pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
 
 		if _, err := pv.WriterFor("1"); err == nil {
 			t.Fatalf("Created a writer on unopen volume")
 		}
+
+		close(eventChannel)
 	})
 }
 
 func TestPhysicalVolume_ReaderWriter(t *testing.T) {
-	pv := NewPhysicalVolume("build/test/" + t.Name())
+	eventChannel := make(chan interface{}, 1024)
+
+	go func() {
+		for event := range eventChannel {
+			glog.Infof("Received event %v", event)
+
+			switch val := event.(type) {
+			case *block.BlockWriteEvent:
+				val.AckChannel <- event
+				glog.Infof("Acknowledged block write %v", val)
+			}
+		}
+
+		glog.Info("Response loop ended")
+	}()
+
+	pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
 
 	if err := pv.Open(true); err != nil {
 		t.Fatal("Open failed for non-existant path - %v", err)
@@ -138,6 +174,8 @@ func TestPhysicalVolume_ReaderWriter(t *testing.T) {
 	if err := pv.Close(); err != nil {
 		t.Fatalf("Failed to close volume - %v", err)
 	}
+
+	close(eventChannel)
 
 	if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
 		t.Fatalf("Failed to remove test directory - %v", err)

@@ -10,18 +10,20 @@ import (
  */
 
 type LogicalVolume struct {
-	Namespace string
-	volumes   []*PhysicalVolume
-	state     VolumeState
+	Namespace    string
+	volumes      []*PhysicalVolume
+	state        VolumeState
+	eventChannel chan interface{}
 }
 
-func NewLogicalVolume(namespace string, volumes []*PhysicalVolume) *LogicalVolume {
+func NewLogicalVolume(namespace string, volumes []*PhysicalVolume, eventChannel chan interface{}) *LogicalVolume {
 	glog.V(1).Infof("Allocate logical volume for namespace %v", namespace)
 
 	return &LogicalVolume{
-		Namespace: namespace,
-		volumes:   volumes,
-		state:     VolumeState_Initial,
+		Namespace:    namespace,
+		volumes:      volumes,
+		state:        VolumeState_Initial,
+		eventChannel: eventChannel,
 	}
 }
 
@@ -56,7 +58,7 @@ func (this *LogicalVolume) WriterFor(fs FileSystem, filename string, blockSize i
 
 	glog.V(1).Infof("Opening writer for %v with block size %v", filename, blockSize)
 
-	return NewWriter(fs, this, filename, blockSize), nil
+	return NewWriter(fs, this, filename, blockSize, this.eventChannel), nil
 }
 
 func (this *LogicalVolume) ReaderFor(fs *LocalFileSystem, filename string) (*LocalFileReader, error) {

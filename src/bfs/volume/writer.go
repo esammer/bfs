@@ -21,10 +21,11 @@ type Writer interface {
 }
 
 type LocalFileWriter struct {
-	fileSystem FileSystem
-	volume     *LogicalVolume
-	blockSize  int
-	filename   string
+	fileSystem   FileSystem
+	volume       *LogicalVolume
+	blockSize    int
+	filename     string
+	eventChannel chan interface{}
 
 	filePos int
 
@@ -35,7 +36,16 @@ type LocalFileWriter struct {
 	pvSelectionSeed int
 }
 
-func NewWriter(fs FileSystem, volume *LogicalVolume, filename string, blockSize int) *LocalFileWriter {
+type FileWriteEvent struct {
+	Time   time.Time
+	Path   string
+	Size   int
+	Blocks []*ns.BlockMetadata
+}
+
+func NewWriter(fs FileSystem, volume *LogicalVolume, filename string, blockSize int,
+	eventChannel chan interface{}) *LocalFileWriter {
+
 	glog.V(2).Infof("Allocate writer for %v with blockSize %d on %#v", filename, blockSize, volume)
 
 	return &LocalFileWriter{
@@ -43,6 +53,7 @@ func NewWriter(fs FileSystem, volume *LogicalVolume, filename string, blockSize 
 		volume:          volume,
 		blockSize:       blockSize,
 		filename:        filename,
+		eventChannel:    eventChannel,
 		blockList:       make([]*ns.BlockMetadata, 0, 16),
 		pvSelectionSeed: rand.Int(),
 	}
@@ -136,6 +147,13 @@ func (this *LocalFileWriter) Close() error {
 		if err := val.Namespace.Add(entry); err != nil {
 			return err
 		}
+	}
+
+	this.eventChannel <- &FileWriteEvent{
+		Time:   time.Now(),
+		Size:   this.filePos,
+		Path:   this.filename,
+		Blocks: this.blockList,
 	}
 
 	glog.V(1).Infof("Closed writer for %s on %s. Wrote %d bytes to %d blocks", this.filename, this.volume.Namespace,

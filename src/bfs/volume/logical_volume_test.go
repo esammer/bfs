@@ -1,14 +1,18 @@
 package volume
 
 import (
+	"bfs/block"
 	"fmt"
+	"github.com/golang/glog"
 	"io"
 	"os"
 	"testing"
 )
 
 func TestLogicalVolume_OpenClose(t *testing.T) {
-	lv := NewLogicalVolume("/", nil)
+	eventChannel := make(chan interface{}, 1024)
+
+	lv := NewLogicalVolume("/", nil, eventChannel)
 
 	if err := lv.Open(); err != nil {
 		t.Fatalf("Failed to open volume - %v", err)
@@ -24,13 +28,29 @@ func TestLogicalVolume_ReaderWriter(t *testing.T) {
 		t.Fatalf("Failed to remove test directory - %v", err)
 	}
 
-	pv := NewPhysicalVolume("build/test/" + t.Name())
+	eventChannel := make(chan interface{}, 1024)
+
+	go func() {
+		for event := range eventChannel {
+			glog.Infof("Received event %v", event)
+
+			switch val := event.(type) {
+			case *block.BlockWriteEvent:
+				val.AckChannel <- event
+				glog.Infof("Acknowledged block write %v", val)
+			}
+		}
+
+		glog.Info("Response loop ended")
+	}()
+
+	pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
 
 	if err := pv.Open(true); err != nil {
 		t.Fatalf("Failed to open physical volume - %v", err)
 	}
 
-	lv := NewLogicalVolume("/", []*PhysicalVolume{pv})
+	lv := NewLogicalVolume("/", []*PhysicalVolume{pv}, eventChannel)
 
 	if err := lv.Open(); err != nil {
 		t.Fatalf("Failed to open volume - %v", err)
@@ -61,6 +81,8 @@ func TestLogicalVolume_ReaderWriter(t *testing.T) {
 	if err := pv.Close(); err != nil {
 		t.Fatalf("Failed to close physical volume - %v", err)
 	}
+
+	close(eventChannel)
 
 	if err := os.RemoveAll("build/test/" + t.Name()); err != nil {
 		t.Fatalf("Failed to remove test directory - %v", err)
