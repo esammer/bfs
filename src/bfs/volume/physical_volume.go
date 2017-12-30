@@ -59,26 +59,30 @@ func (this *PhysicalVolume) Open(allowInitialization bool) error {
 		return fmt.Errorf("Can not open volume from state %v", this.state)
 	}
 
-	if info, err := os.Stat(this.RootPath); err == nil {
-		if !info.IsDir() {
-			return fmt.Errorf("Unable to open volume - %v is not a directory", this.RootPath)
+	idPath := filepath.Join(this.RootPath, "id")
+
+	if info, err := os.Stat(idPath); err == nil {
+		if !info.Mode().IsRegular(){
+			return fmt.Errorf("Unable to open volume - %v is not a file", idPath)
 		}
 	} else if allowInitialization {
-		glog.Infof("Volume path %v does not exist - creating it.", this.RootPath)
+		glog.Infof("Volume %v does not exist or is uninitialized - creating it.", this.RootPath)
 
 		if err := os.MkdirAll(this.RootPath, 0700); err == nil {
 			glog.Infof("Volume path created at %v", this.RootPath)
 		}
 
 		id := uuid.NewRandom()
-		if err := ioutil.WriteFile(filepath.Join(this.RootPath, "id"), id, 0644); err != nil {
+		if err := ioutil.WriteFile(idPath, id, 0644); err != nil {
 			return err
 		}
 
 		glog.Infof("Generated volume ID: %v", id.String())
+	} else {
+		return err
 	}
 
-	id, err := ioutil.ReadFile(filepath.Join(this.RootPath, "id"))
+	id, err := ioutil.ReadFile(idPath)
 	if err != nil {
 		return err
 	}
