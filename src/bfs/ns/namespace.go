@@ -3,6 +3,7 @@ package ns
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/golang/glog"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -43,9 +44,29 @@ type BlockMetadata struct {
 	PVID   string
 }
 
+type status int
+
+const (
+	namespaceStatus_INITIAL status = iota
+	namespaceStatus_OPEN
+	namespaceStatus_CLOSED
+)
+
+var namespaceStatusStr = []string{
+	"INITIAL",
+	"OPEN",
+	"CLOSED",
+}
+
+func (this *status) String() string {
+	return namespaceStatusStr[*this]
+}
+
 type Namespace struct {
 	path string
 	db   *leveldb.DB
+
+	state status
 }
 
 // Default LevelDB read and write options.
@@ -66,12 +87,17 @@ const (
 
 func New(path string) *Namespace {
 	return &Namespace{
-		path: path,
+		path:  path,
+		state: namespaceStatus_INITIAL,
 	}
 }
 
 func (this *Namespace) Open() error {
 	glog.V(1).Infof("Opening namespace at %v", this.path)
+
+	if this.state != namespaceStatus_INITIAL {
+		return fmt.Errorf("unable to open namespace from state %v", this.state)
+	}
 
 	options := &opt.Options{
 		ErrorIfMissing: false,
@@ -98,11 +124,17 @@ func (this *Namespace) Open() error {
 		}
 	}
 
+	this.state = namespaceStatus_OPEN
+
 	return nil
 }
 
 func (this *Namespace) Add(entry *Entry) error {
 	glog.V(1).Infof("Adding entry %#v", entry)
+
+	if this.state != namespaceStatus_OPEN {
+		return fmt.Errorf("unable to perform operation in state %v", this.state)
+	}
 
 	value, err := json.Marshal(entry)
 
@@ -138,6 +170,10 @@ func (this *Namespace) Add(entry *Entry) error {
 func (this *Namespace) Get(path string) (*Entry, error) {
 	glog.V(1).Infof("Getting entry %v", path)
 
+	if this.state != namespaceStatus_OPEN {
+		return nil, fmt.Errorf("unable to perform operation in state %v", this.state)
+	}
+
 	key := keyFor(dbPrefix_Entry, path)
 
 	if value, err := this.db.Get(key, defaultReadOpts); err != nil {
@@ -155,6 +191,10 @@ func (this *Namespace) Get(path string) (*Entry, error) {
 
 func (this *Namespace) List(from string, to string) ([]*Entry, error) {
 	glog.V(1).Infof("Listing entries from %v to %v", from, to)
+
+	if this.state != namespaceStatus_OPEN {
+		return nil, fmt.Errorf("unable to perform operation in state %v", this.state)
+	}
 
 	startKey := keyFor(dbPrefix_Entry, from)
 	endKey := keyFor(dbPrefix_Entry, to)
@@ -187,7 +227,15 @@ func (this *Namespace) List(from string, to string) ([]*Entry, error) {
 func (this *Namespace) Close() error {
 	glog.V(1).Infof("Closing namespace at %v", this.path)
 
-	return this.db.Close()
+	if this.state != namespaceStatus_OPEN {
+		return fmt.Errorf("unable to close namespace from state %v", this.state)
+	}
+
+	err := this.db.Close()
+
+	this.state = namespaceStatus_CLOSED
+
+	return err
 }
 
 func keyFor(table byte, key string) []byte {
