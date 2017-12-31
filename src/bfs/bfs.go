@@ -52,14 +52,6 @@ func main() {
 	eventChannel := make(chan interface{}, 1024)
 
 	namespace := ns.New(config.NamespacePath)
-	if err := namespace.Open(); err != nil {
-		glog.Errorf("Failed to open namespace %s - %s", config.NamespacePath, err)
-		os.Exit(1)
-	}
-	if err := namespace.Close(); err != nil {
-		glog.Errorf("Failed to close namespace %s - %s", config.NamespacePath, err)
-		os.Exit(1)
-	}
 
 	go func() {
 		for event := range eventChannel {
@@ -110,7 +102,10 @@ func main() {
 		}
 	}
 
-	fs.Close()
+	if err := fs.Close(); err != nil {
+		glog.Errorf("Unable to close filesystem - %s", err)
+		os.Exit(1)
+	}
 
 	for _, pv := range pvs {
 		err := pv.Close()
