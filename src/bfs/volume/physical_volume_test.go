@@ -95,7 +95,7 @@ func TestPhysicalVolume_StateTransitions(t *testing.T) {
 
 		pv := NewPhysicalVolume(filepath.Join("build", "test", t.Name()), eventChannel)
 
-		_, err := pv.ReaderFor("1")
+		_, err := pv.OpenRead("1")
 		require.Error(t, err, "Created a reader on unopen volume")
 	})
 
@@ -106,7 +106,7 @@ func TestPhysicalVolume_StateTransitions(t *testing.T) {
 
 		pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
 
-		_, err := pv.WriterFor("1")
+		_, err := pv.OpenWrite("1")
 		require.Error(t, err, "Created a writer on unopen volume")
 
 		close(eventChannel)
@@ -139,7 +139,7 @@ func TestPhysicalVolume_ReaderWriter(t *testing.T) {
 	err = pv.Open(true)
 	require.NoError(t, err, "Open failed for non-existent path - %v", err)
 
-	writer, err := pv.WriterFor("1")
+	writer, err := pv.OpenWrite("1")
 	require.NoError(t, err)
 
 	_, err = io.WriteString(writer, "Test 1")
@@ -148,7 +148,7 @@ func TestPhysicalVolume_ReaderWriter(t *testing.T) {
 	err = writer.Close()
 	require.NoError(t, err, "Failed to close writer - %v", err)
 
-	reader, err := pv.ReaderFor("1")
+	reader, err := pv.OpenRead("1")
 	require.NoError(t, err, "Failed to create reader - %v", err)
 
 	buffer := make([]byte, 16)

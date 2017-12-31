@@ -66,7 +66,7 @@ func (this *LocalFileReader) Read(buffer []byte) (int, error) {
 			for _, pv := range this.volume.volumes {
 				if pv.ID.String() == this.entry.Blocks[this.blockIdx].PVID {
 					glog.V(2).Infof("Read from pv %s", pv.ID.String())
-					reader, err := pv.ReaderFor(this.entry.Blocks[this.blockIdx].Block)
+					reader, err := pv.OpenRead(this.entry.Blocks[this.blockIdx].Block)
 					if err != nil {
 						return 0, err
 					}

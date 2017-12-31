@@ -93,7 +93,7 @@ func (this *LocalFileWriter) Write(buffer []byte) (int, error) {
 
 			this.blockList = append(this.blockList, blockMetadata)
 
-			if blockWriter, err := pv.WriterFor(blockId); err == nil {
+			if blockWriter, err := pv.OpenWrite(blockId); err == nil {
 				this.blockWriter = blockWriter
 			} else {
 				return 0, err
