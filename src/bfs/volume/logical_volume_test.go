@@ -58,7 +58,7 @@ func TestLogicalVolume_ReaderWriter(t *testing.T) {
 	err = lv.Open()
 	require.NoError(t, err, "Failed to open volume - %v", err)
 
-	writer, err := lv.WriterFor(new(MockFileSystem), "test1.txt", 1024*1024)
+	writer, err := lv.OpenWrite(new(MockFileSystem), "test1.txt", 1024*1024)
 	require.NoError(t, err, "Unable to open writer - %v", err)
 
 	for i := 0; i < 1000000; i++ {

@@ -65,7 +65,7 @@ func (this *LocalFileSystem) OpenWrite(path string, blockSize int) (Writer, erro
 		return nil, err
 	}
 
-	return selectedLv.WriterFor(this, path, blockSize)
+	return selectedLv.OpenWrite(this, path, blockSize)
 }
 
 func (this *LocalFileSystem) OpenRead(path string) (Reader, error) {
@@ -76,7 +76,7 @@ func (this *LocalFileSystem) OpenRead(path string) (Reader, error) {
 		return nil, err
 	}
 
-	return selectedLv.ReaderFor(this, path)
+	return selectedLv.OpenRead(this, path)
 }
 
 func (this *LocalFileSystem) selectLogicalVolume(path string) (*LogicalVolume, error) {
