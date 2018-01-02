@@ -62,7 +62,7 @@ func (this *PhysicalVolume) Open(allowInitialization bool) error {
 	idPath := filepath.Join(this.RootPath, "id")
 
 	if info, err := os.Stat(idPath); err == nil {
-		if !info.Mode().IsRegular(){
+		if !info.Mode().IsRegular() {
 			return fmt.Errorf("Unable to open volume - %v is not a file", idPath)
 		}
 	} else if allowInitialization {

@@ -36,7 +36,7 @@ func TestLogicalVolume_ReaderWriter(t *testing.T) {
 
 			switch val := event.(type) {
 			case *block.BlockWriteEvent:
-				val.AckChannel <- event
+				val.ResponseChannel <- event
 				glog.Infof("Acknowledged block write %v", val)
 			case *FileWriteEvent:
 				// Ignore file write events.
