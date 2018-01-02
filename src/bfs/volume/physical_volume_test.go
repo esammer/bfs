@@ -13,8 +13,6 @@ import (
 
 func TestPhysicalVolume_Open(t *testing.T) {
 	t.Run("autoInitialize=true", func(t *testing.T) {
-		//t.Parallel()
-
 		testDir := test.New("build", "test", t.Name())
 		err := testDir.Create()
 		require.NoError(t, err)
@@ -36,8 +34,6 @@ func TestPhysicalVolume_Open(t *testing.T) {
 	})
 
 	t.Run("autoInitialize=false", func(t *testing.T) {
-		//t.Parallel()
-
 		testDir := test.New("build", "test", t.Name())
 		err := testDir.Create()
 		require.NoError(t, err)
@@ -58,8 +54,6 @@ func TestPhysicalVolume_Open(t *testing.T) {
 	})
 
 	t.Run("volume-is-file", func(t *testing.T) {
-		//t.Parallel()
-
 		testDir := test.New("build", "test", "TestPhysicalVolume_Open")
 		err := testDir.Create()
 		require.NoError(t, err)
@@ -89,8 +83,6 @@ func TestPhysicalVolume_Open(t *testing.T) {
 
 func TestPhysicalVolume_StateTransitions(t *testing.T) {
 	t.Run("new-reader", func(t *testing.T) {
-		t.Parallel()
-
 		eventChannel := make(chan interface{}, 1024)
 
 		pv := NewPhysicalVolume(filepath.Join("build", "test", t.Name()), eventChannel)
@@ -100,8 +92,6 @@ func TestPhysicalVolume_StateTransitions(t *testing.T) {
 	})
 
 	t.Run("new-writer", func(t *testing.T) {
-		t.Parallel()
-
 		eventChannel := make(chan interface{}, 1024)
 
 		pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
