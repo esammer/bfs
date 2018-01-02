@@ -122,3 +122,13 @@ func (this *PhysicalVolume) OpenWrite(blockId string) (block.BlockWriter, error)
 
 	return block.NewWriter(this.RootPath, blockId, this.eventChannel)
 }
+
+func (this *PhysicalVolume) Delete(blockId string) error {
+	if this.state != VolumeState_Open {
+		return fmt.Errorf("Can not create block writer on volume in state %v", this.state)
+	}
+
+	path := filepath.Join(this.RootPath, blockId)
+
+	return os.Remove(path)
+}

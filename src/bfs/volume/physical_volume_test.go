@@ -113,6 +113,48 @@ func TestPhysicalVolume_StateTransitions(t *testing.T) {
 	})
 }
 
+func TestPhysicalVolume_Delete(t *testing.T) {
+	testDir := test.New("build", "test", t.Name())
+	require.NoError(t, testDir.Create())
+
+	eventChannel := make(chan interface{}, 1024)
+	pv := NewPhysicalVolume(testDir.Path, eventChannel)
+
+	require.NoError(t, pv.Open(true))
+
+	go func() {
+		for event := range eventChannel {
+			switch e := event.(type) {
+			case *block.BlockWriteEvent:
+				e.ResponseChannel <- e
+			}
+		}
+	}()
+
+	writer, err := pv.OpenWrite("1")
+	require.NoError(t, err)
+	_, err = writer.Write([]byte{0})
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	blockPath := filepath.Join(testDir.Path, "1")
+
+	_, err = os.Stat(blockPath)
+	require.NoError(t, err)
+
+	require.NoError(t, pv.Delete("1"))
+
+	_, err = os.Stat(blockPath)
+	require.Error(t, err)
+	require.True(t, os.IsNotExist(err))
+
+	require.NoError(t, pv.Close())
+
+	close(eventChannel)
+
+	require.NoError(t, testDir.Destroy())
+}
+
 func TestPhysicalVolume_ReaderWriter(t *testing.T) {
 	eventChannel := make(chan interface{}, 1024)
 
