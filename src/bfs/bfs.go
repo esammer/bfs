@@ -57,7 +57,7 @@ func main() {
 		for event := range eventChannel {
 			switch e := event.(type) {
 			case *block.BlockWriteEvent:
-				e.AckChannel <- e
+				e.ResponseChannel <- e
 			}
 		}
 	}()
