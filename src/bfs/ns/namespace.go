@@ -3,6 +3,7 @@ package ns
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -68,6 +69,17 @@ type Namespace struct {
 
 	state status
 }
+
+type Error struct {
+	error
+	Path string
+}
+
+func (this *Error) Error() string {
+	return ErrNoSuchEntry.Error() + " - " + this.Path
+}
+
+var ErrNoSuchEntry = errors.New("no such entry")
 
 // Default LevelDB read and write options.
 var defaultReadOpts = &opt.ReadOptions{}
@@ -176,17 +188,21 @@ func (this *Namespace) Get(path string) (*Entry, error) {
 
 	key := keyFor(dbPrefix_Entry, path)
 
-	if value, err := this.db.Get(key, defaultReadOpts); err != nil {
+	value, err := this.db.Get(key, defaultReadOpts)
+
+	if err == leveldb.ErrNotFound {
+		return nil, &Error{Path: path, error: ErrNoSuchEntry}
+	} else if err != nil {
 		return nil, err
-	} else {
-		var entry Entry
-
-		if err := json.Unmarshal(value, &entry); err != nil {
-			return nil, err
-		}
-
-		return &entry, nil
 	}
+
+	var entry Entry
+
+	if err := json.Unmarshal(value, &entry); err != nil {
+		return nil, err
+	}
+
+	return &entry, nil
 }
 
 func (this *Namespace) List(from string, to string) ([]*Entry, error) {
@@ -222,6 +238,42 @@ func (this *Namespace) List(from string, to string) ([]*Entry, error) {
 	}
 
 	return entries, nil
+}
+
+func (this *Namespace) Delete(path string) error {
+	glog.V(1).Infof("Deleting entry %s", path)
+
+	if this.state != namespaceStatus_OPEN {
+		return fmt.Errorf("unable to perform operation in state %v", this.state)
+	}
+
+	return this.db.Delete(keyFor(dbPrefix_Entry, path), defaultWriteOpts)
+}
+
+func (this *Namespace) Rename(from string, to string) (bool, error) {
+	glog.V(1).Infof("Renaming entry %s to %s", from, to)
+
+	if this.state != namespaceStatus_OPEN {
+		return false, fmt.Errorf("unable to perform operation in state %v", this.state)
+	}
+
+	entry, err := this.Get(from)
+	if err != nil {
+		return false, err
+	}
+
+	entry.Path = to
+
+	value, err := json.Marshal(entry)
+	if err != nil {
+		return false, err
+	}
+
+	batch := leveldb.Batch{}
+	batch.Put(keyFor(dbPrefix_Entry, to), value)
+	batch.Delete(keyFor(dbPrefix_Entry, from))
+
+	return true, this.db.Write(&batch, defaultWriteOpts)
 }
 
 func (this *Namespace) Close() error {

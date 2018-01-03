@@ -81,6 +81,17 @@ func TestNamespace_Open(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	err = ns.Delete("/a.txt")
+	require.NoError(t, err)
+
+	ok, err := ns.Rename("/b.txt", "/a.txt")
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	entry, err = ns.Get("/a.txt")
+	require.NoError(t, err)
+	require.Len(t, entry.Blocks, 4)
+
 	err = ns.Close()
 	require.NoError(t, err, "Close failed")
 
