@@ -14,6 +14,7 @@ import (
 	"math/rand"
 	"net"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -130,7 +131,11 @@ func TestBlockService_Read(t *testing.T) {
 		sem <- i
 	}
 
+	wg := sync.WaitGroup{}
+
 	for i := 0; i < clientCount; i++ {
+		wg.Add(1)
+
 		go func(i int) {
 			lockId := <-sem
 			glog.V(2).Infof("Client %d acquired lock %d", i, lockId)
@@ -155,8 +160,8 @@ func TestBlockService_Read(t *testing.T) {
 				response, err := readStream.Recv()
 
 				if response != nil {
-					glog.V(2).Infof("Received response - client: %v, volumeId: %v, blockId: %v, seq: %v, "+
-						"status: %v buffer len: %d",
+					glog.V(2).Infof(
+						"Received response - client: %v, volumeId: %v, blockId: %v, seq: %v, status: %v buffer len: %d",
 						response.ClientId,
 						response.VolumeId,
 						response.BlockId,
@@ -174,15 +179,12 @@ func TestBlockService_Read(t *testing.T) {
 				}
 			}
 
-			completeSem <- i
+			wg.Done()
 			sem <- lockId
 		}(i)
 	}
 
-	for i := 0; i < clientCount; i++ {
-		clientId := <-completeSem
-		glog.V(1).Infof("Client %d complete", clientId)
-	}
+	wg.Wait()
 
 	glog.V(1).Infof("All clients complete")
 }
