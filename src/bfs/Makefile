@@ -9,7 +9,7 @@ PACKAGES = . \
 	$(PROJECT)/host \
 	$(PROJECT)/test
 PROJECT_DIRS = . volume block ns blockservice host test
-PROTO_FILES = blockservice/blockservice.pb.go
+PROTO_FILES = blockservice/blockservice.pb.go nameservice/nameservice.pb.go
 
 .PHONY: help all compile clean check format generate generate-proto deps
 

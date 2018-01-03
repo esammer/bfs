@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+message GetRequest {
+  string path = 1;
+}
+
+message GetResponse {
+  Entry entry = 1;
+}
+
+message AddRequest {
+  Entry entry = 1;
+}
+
+message AddResponse {
+
+}
+
+message DeleteRequest {
+  string path = 1;
+}
+
+message DeleteResponse {
+
+}
+
+message RenameRequest {
+  string sourcePath = 1;
+  string destinationPath = 2;
+}
+
+message RenameResponse {
+  bool success = 1;
+}
+
+message BlockMetadata {
+  string blockId = 1;
+  string pvId = 2;
+}
+
+message Entry {
+  string path = 1;
+  string lvId = 2;
+  uint32 permissions = 3;
+  repeated BlockMetadata blocks = 4;
+}
+
+service NameService {
+  rpc Get (GetRequest) returns (GetResponse);
+  rpc Add (AddRequest) returns (AddResponse);
+  rpc Delete (DeleteRequest) returns (DeleteResponse);
+  rpc Rename (RenameRequest) returns (RenameResponse);
+}
