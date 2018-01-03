@@ -13,3 +13,7 @@ pkg/
 
 .idea/
 *.iml
+
+# Generated code.
+
+*.pb.go
