@@ -17,41 +17,6 @@ import (
 	"testing"
 )
 
-/*
-func SetupTest() {
-	glog.Infof("Setup %s", this.T().Name())
-
-	this.testDir = test.New("build", "test", this.T().Name())
-	this.Require().NoError(this.testDir.Create())
-}
-
-func (this *testBlockService) TearDownTest() {
-	glog.Infof("Tear down %s", this.T().Name())
-
-	this.Require().NoError(this.testDir.Destroy())
-
-	glog.Flush()
-}
-
-func (this *testBlockService) TearDownSuite() {
-	glog.Info("Tear down suite")
-
-	entries, err := ioutil.ReadDir(filepath.Join("build", "test"))
-	this.Require().NoError(err)
-
-	if len(entries) == 0 {
-		err := os.Remove(filepath.Join("build", "test"))
-		this.Require().NoError(err)
-	}
-
-	if len(entries) == 0 {
-		err := os.Remove("build")
-		this.Require().NoError(err)
-	}
-
-	glog.Flush()
-}*/
-
 func TestBlockService_Read(t *testing.T) {
 	testDir := test.New("build", "test", t.Name())
 	err := testDir.Create()
