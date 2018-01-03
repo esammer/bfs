@@ -5,9 +5,10 @@ PACKAGES = . \
 	$(PROJECT)/volume \
 	$(PROJECT)/block \
 	$(PROJECT)/ns \
-	$(PROJECT)/nameservice \
-	$(PROJECT)/blockservice
-PROJECT_DIRS = . volume block ns nameservice blockservice
+	$(PROJECT)/blockservice \
+	$(PROJECT)/host \
+	$(PROJECT)/test
+PROJECT_DIRS = . volume block ns blockservice host test
 PROTO_FILES = blockservice/blockservice.pb.go
 
 .PHONY: help all compile clean check format generate generate-proto deps
@@ -47,7 +48,7 @@ generate: generate-proto
 generate-proto: $(PROTO_FILES)
 
 clean:
-	rm -rf $(GOPATH)/pkg $(GOPATH)/bin
+	rm -rf $(GOPATH)/pkg/*/bfs $(GOPATH)/bin/bfs
 	for p in $(PROJECT_DIRS); do \
 		if [ -d "$$p/build" ] ; then \
 			rm -rf "$$p/build"; \
