@@ -1,6 +1,7 @@
 package size
 
 import (
+	_ "github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
