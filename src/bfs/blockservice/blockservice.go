@@ -2,27 +2,30 @@ package blockservice
 
 import (
 	"bfs/block"
-	"bfs/volume"
+	"bfs/util/size"
 	"context"
+	"fmt"
 	"github.com/golang/glog"
 	"github.com/pborman/uuid"
 	"io"
 )
 
+const (
+	DefaultMaxReadSize = 8 * size.MB
+)
+
 type BlockService struct {
-	volumes   []*volume.PhysicalVolume
-	volumeIdx map[string]int
+	volumeIdx map[string]*PhysicalVolume
 }
 
-func New(volumes []*volume.PhysicalVolume) *BlockService {
-	volumeIdx := make(map[string]int, len(volumes))
+func New(volumes []*PhysicalVolume) *BlockService {
+	volumeIdx := make(map[string]*PhysicalVolume, len(volumes))
 
-	for i, pv := range volumes {
-		volumeIdx[pv.ID.String()] = i
+	for _, pv := range volumes {
+		volumeIdx[pv.ID.String()] = pv
 	}
 
 	this := &BlockService{
-		volumes:   volumes,
 		volumeIdx: volumeIdx,
 	}
 
@@ -58,13 +61,16 @@ func (this *BlockService) Write(stream BlockService_WriteServer) error {
 			glog.V(2).Infof("Writer iter %d - Start writer", chunkIter)
 
 			volumeId = request.VolumeId
-			pv := this.volumes[this.volumeIdx[volumeId]]
+			pv, ok := this.volumeIdx[volumeId]
+			if !ok {
+				return fmt.Errorf("no such volume id '%s'", volumeId)
+			}
 
-			var err error
 			blockUUID := uuid.NewRandom()
 			blockId = blockUUID.String()
-			writer, err = pv.OpenWrite(blockId)
 
+			var err error
+			writer, err = pv.OpenWrite(blockId)
 			if err != nil {
 				return err
 			}
@@ -112,8 +118,11 @@ func (this *BlockService) Write(stream BlockService_WriteServer) error {
 func (this *BlockService) Read(request *ReadRequest, stream BlockService_ReadServer) error {
 	glog.V(1).Infof("Read - volumeId: %s blockId: %s", request.VolumeId, request.BlockId)
 
-	volumeIdx := this.volumeIdx[request.VolumeId]
-	pv := this.volumes[volumeIdx]
+	volumeId := request.VolumeId
+	pv, ok := this.volumeIdx[volumeId]
+	if !ok {
+		return fmt.Errorf("no such volume id '%s'", volumeId)
+	}
 
 	reader, err := pv.OpenRead(request.BlockId)
 	if err != nil {
@@ -122,17 +131,22 @@ func (this *BlockService) Read(request *ReadRequest, stream BlockService_ReadSer
 
 	defer reader.Close()
 
-	buffer := make([]byte, request.ChunkSize)
+	chunkSize := DefaultMaxReadSize
+	if request.ChunkSize < DefaultMaxReadSize {
+		chunkSize = int(request.ChunkSize)
+	}
+
+	buffer := make([]byte, chunkSize)
 
 	for i := 0; true; i++ {
-		size, err := reader.Read(buffer)
+		readLen, err := reader.Read(buffer)
 
-		if size > 0 {
+		if readLen > 0 {
 			response := &ReadResponse{
 				ClientId: request.ClientId,
 				VolumeId: pv.ID.String(),
 				BlockId:  request.BlockId,
-				Buffer:   buffer[:size],
+				Buffer:   buffer[:readLen],
 				Seq:      uint32(i),
 				Status:   Status_SUCCESS,
 			}
@@ -162,7 +176,12 @@ func (this *BlockService) Delete(context context.Context, request *ReadRequest) 
 		request.BlockId,
 	)
 
-	pv := this.volumes[this.volumeIdx[request.VolumeId]]
+	volumeId := request.VolumeId
+	pv, ok := this.volumeIdx[volumeId]
+	if !ok {
+		return nil, fmt.Errorf("no such volume id '%s'", volumeId)
+	}
+
 	err := pv.Delete(request.BlockId)
 
 	if err != nil {
