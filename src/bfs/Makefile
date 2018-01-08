@@ -31,7 +31,7 @@ PROJECT_DIRS = . \
 	volumeutil
 PROTO_FILES = blockservice/blockservice.pb.go nameservice/nameservice.pb.go fsservice/fsservice.pb.go
 
-.PHONY: help all compile clean check format generate generate-proto deps
+.PHONY: all benchmark check clean compile deps format generate generate-proto help realclean
 
 help:
 	@echo "Supported targets for $(PROJECT):\n\
@@ -39,6 +39,7 @@ help:
 	  Standard:\n\
 	    all       run compile and check.\n\
 	    check     run tests for all packages.\n\
+	    benchmark run benchmarks for all packages.\n\
 	    clean     remove all generated build artifacts.\n\
 	    compile   compile and install all source in $(GOPATH).\n\
 	    help      display this help.\n\
@@ -62,6 +63,9 @@ compile: deps generate-proto
 
 check: compile
 	$(GO) test $(TEST_ARGS) $(PACKAGES) $(TEST_EXTRA_ARGS)
+
+benchmark: compile
+	$(GO) test $(TEST_ARGS) $(PACKAGES) -bench . -benchmem -run ^$$ $(TEST_EXTRA_ARGS)
 
 generate: generate-proto
 
