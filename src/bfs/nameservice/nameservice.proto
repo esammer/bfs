@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+package nameservice;
+
 message GetRequest {
   string path = 1;
 }
