@@ -22,15 +22,12 @@ func TestNameService(t *testing.T) {
 	require.NoError(t, err)
 	defer testDir.Destroy()
 
-	eventChannel := make(chan interface{}, 128)
-	defer close(eventChannel)
-
 	namespace := ns.New(testDir.Path)
 	err = namespace.Open()
 	require.NoError(t, err)
 	defer namespace.Close()
 
-	service := New(namespace, eventChannel)
+	service := New(namespace)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:8084")
 	require.NoError(t, err)

@@ -6,16 +6,14 @@ import (
 )
 
 type NameService struct {
-	Namespace    *ns.Namespace
-	eventChannel chan interface{}
+	Namespace *ns.Namespace
 
 	NameServiceServer
 }
 
-func New(namespace *ns.Namespace, eventChannel chan interface{}) *NameService {
+func New(namespace *ns.Namespace) *NameService {
 	return &NameService{
-		Namespace:    namespace,
-		eventChannel: eventChannel,
+		Namespace: namespace,
 	}
 }
 
