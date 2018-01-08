@@ -2,16 +2,33 @@ PROJECT = bfs
 GO = go
 DEP = dep
 PACKAGES = . \
-	$(PROJECT)/volume \
 	$(PROJECT)/block \
-	$(PROJECT)/ns \
-	$(PROJECT)/nameservice \
 	$(PROJECT)/blockservice \
 	$(PROJECT)/fsservice \
 	$(PROJECT)/host \
+	$(PROJECT)/lru \
+	$(PROJECT)/nameservice \
+	$(PROJECT)/ns \
+	$(PROJECT)/server/blockserver \
+	$(PROJECT)/server/nameserver \
+	$(PROJECT)/test \
 	$(PROJECT)/util/size \
-	$(PROJECT)/test
-PROJECT_DIRS = . volume block ns blockservice nameservice fsservice host test util/size
+	$(PROJECT)/volume \
+	$(PROJECT)/volumeutil
+PROJECT_DIRS = . \
+	block \
+	blockservice \
+	fsservice \
+	host \
+	lru \
+	nameservice \
+	ns \
+	server/blockserver \
+	server/nameserver \
+	test \
+	util/size \
+	volume \
+	volumeutil
 PROTO_FILES = blockservice/blockservice.pb.go nameservice/nameservice.pb.go fsservice/fsservice.pb.go
 
 .PHONY: help all compile clean check format generate generate-proto deps
