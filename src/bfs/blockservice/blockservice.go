@@ -137,9 +137,14 @@ func (this *BlockService) Read(request *ReadRequest, stream BlockService_ReadSer
 	}
 
 	buffer := make([]byte, chunkSize)
+	readCalls := 0
+	sendCalls := 0
+	totalRead := 0
 
 	for i := 0; true; i++ {
 		readLen, err := reader.Read(buffer)
+		totalRead += readLen
+		readCalls++
 
 		if readLen > 0 {
 			response := &ReadResponse{
@@ -154,6 +159,7 @@ func (this *BlockService) Read(request *ReadRequest, stream BlockService_ReadSer
 			if err := stream.Send(response); err != nil {
 				return err
 			}
+			sendCalls++
 		}
 
 		if err == io.EOF {
@@ -164,6 +170,16 @@ func (this *BlockService) Read(request *ReadRequest, stream BlockService_ReadSer
 	}
 
 	glog.V(1).Infof("Read complete - %s", request.BlockId)
+
+	if glog.V(2) {
+		glog.Infof("Performance: %f bytes/read - readCalls: %d sendCalls: %d requestChunkSize: %d actualChunkSize: %d",
+			float64(totalRead)/float64(readCalls),
+			readCalls,
+			sendCalls,
+			request.ChunkSize,
+			chunkSize,
+		)
+	}
 
 	return nil
 }

@@ -1,9 +1,7 @@
-package volume
+package blockservice
 
 import (
-	"bfs/block"
 	"bfs/test"
-	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 	"io"
 	"os"
@@ -17,17 +15,13 @@ func TestPhysicalVolume_Open(t *testing.T) {
 		err := testDir.Create()
 		require.NoError(t, err)
 
-		eventChannel := make(chan interface{}, 1024)
-
-		pv := NewPhysicalVolume(filepath.Join(testDir.Path, "pv1"), eventChannel)
+		pv := NewPhysicalVolume(filepath.Join(testDir.Path, "pv1"))
 
 		err = pv.Open(true)
 		require.NoError(t, err, "Open failed for non-existant path - %v", err)
 
 		err = pv.Close()
 		require.NoError(t, err, "Failed to close volume - %v", err)
-
-		close(eventChannel)
 
 		err = testDir.Destroy()
 		require.NoError(t, err)
@@ -38,16 +32,12 @@ func TestPhysicalVolume_Open(t *testing.T) {
 		err := testDir.Create()
 		require.NoError(t, err)
 
-		eventChannel := make(chan interface{}, 1024)
-
-		pv := NewPhysicalVolume(filepath.Join(testDir.Path, "pv1"), eventChannel)
+		pv := NewPhysicalVolume(filepath.Join(testDir.Path, "pv1"))
 
 		err = pv.Open(false)
 		require.Error(t, err, "Open succeeded for non-existent path")
 
 		// No call to pv.Close() because the volume shouldn't open.
-
-		close(eventChannel)
 
 		err = testDir.Destroy()
 		require.NoError(t, err)
@@ -60,9 +50,7 @@ func TestPhysicalVolume_Open(t *testing.T) {
 
 		filePath := filepath.Join(testDir.BaseDir, t.Name())
 
-		eventChannel := make(chan interface{}, 1024)
-
-		pv := NewPhysicalVolume(filePath, eventChannel)
+		pv := NewPhysicalVolume(filePath)
 
 		f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0600)
 		require.NoError(t, err, "Failed to create test file - %v", err)
@@ -74,8 +62,6 @@ func TestPhysicalVolume_Open(t *testing.T) {
 
 		// No call to pv.Close() because the volume shouldn't open.
 
-		close(eventChannel)
-
 		err = testDir.Destroy()
 		require.NoError(t, err)
 	})
@@ -83,23 +69,17 @@ func TestPhysicalVolume_Open(t *testing.T) {
 
 func TestPhysicalVolume_StateTransitions(t *testing.T) {
 	t.Run("new-reader", func(t *testing.T) {
-		eventChannel := make(chan interface{}, 1024)
-
-		pv := NewPhysicalVolume(filepath.Join("build", "test", t.Name()), eventChannel)
+		pv := NewPhysicalVolume(filepath.Join("build", "test", t.Name()))
 
 		_, err := pv.OpenRead("1")
 		require.Error(t, err, "Created a reader on unopen volume")
 	})
 
 	t.Run("new-writer", func(t *testing.T) {
-		eventChannel := make(chan interface{}, 1024)
-
-		pv := NewPhysicalVolume("build/test/"+t.Name(), eventChannel)
+		pv := NewPhysicalVolume("build/test/" + t.Name())
 
 		_, err := pv.OpenWrite("1")
 		require.Error(t, err, "Created a writer on unopen volume")
-
-		close(eventChannel)
 	})
 }
 
@@ -107,19 +87,9 @@ func TestPhysicalVolume_Delete(t *testing.T) {
 	testDir := test.New("build", "test", t.Name())
 	require.NoError(t, testDir.Create())
 
-	eventChannel := make(chan interface{}, 1024)
-	pv := NewPhysicalVolume(testDir.Path, eventChannel)
+	pv := NewPhysicalVolume(testDir.Path)
 
 	require.NoError(t, pv.Open(true))
-
-	go func() {
-		for event := range eventChannel {
-			switch e := event.(type) {
-			case *block.BlockWriteEvent:
-				e.ResponseChannel <- e
-			}
-		}
-	}()
 
 	writer, err := pv.OpenWrite("1")
 	require.NoError(t, err)
@@ -139,34 +109,15 @@ func TestPhysicalVolume_Delete(t *testing.T) {
 	require.True(t, os.IsNotExist(err))
 
 	require.NoError(t, pv.Close())
-
-	close(eventChannel)
-
 	require.NoError(t, testDir.Destroy())
 }
 
 func TestPhysicalVolume_ReaderWriter(t *testing.T) {
-	eventChannel := make(chan interface{}, 1024)
-
-	go func() {
-		for event := range eventChannel {
-			glog.Infof("Received event %v", event)
-
-			switch val := event.(type) {
-			case *block.BlockWriteEvent:
-				val.ResponseChannel <- event
-				glog.Infof("Acknowledged block write %v", val)
-			}
-		}
-
-		glog.Info("Response loop ended")
-	}()
-
 	testDir := test.New("build", "test", t.Name())
 	err := testDir.Create()
 	require.NoError(t, err)
 
-	pv := NewPhysicalVolume(testDir.Path, eventChannel)
+	pv := NewPhysicalVolume(testDir.Path)
 
 	err = pv.Open(true)
 	require.NoError(t, err, "Open failed for non-existent path - %v", err)
@@ -197,8 +148,6 @@ func TestPhysicalVolume_ReaderWriter(t *testing.T) {
 
 	err = pv.Close()
 	require.NoError(t, err, "Failed to close volume - %v", err)
-
-	close(eventChannel)
 
 	err = testDir.Destroy()
 	require.NoError(t, err)

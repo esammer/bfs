@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 /*
@@ -24,31 +23,22 @@ type BlockWriter interface {
  */
 
 type LocalBlockWriter struct {
-	BlockId      string
-	RootPath     string
-	Size         int
-	writer       *os.File
-	eventChannel chan interface{}
+	BlockId  string
+	RootPath string
+	Size     int
+	writer   *os.File
 }
 
-type BlockWriteEvent struct {
-	Time            time.Time
-	BlockId         string
-	Size            int
-	ResponseChannel chan interface{}
-}
-
-func NewWriter(rootPath string, blockId string, eventChannel chan interface{}) (*LocalBlockWriter, error) {
+func NewWriter(rootPath string, blockId string) (*LocalBlockWriter, error) {
 	path := filepath.Join(rootPath, blockId)
 
 	glog.V(2).Infof("Open block %v @ %v for write", blockId, path)
 
 	if writer, err := ioutil.TempFile(rootPath, fmt.Sprintf(".%s-", blockId)); err == nil {
 		return &LocalBlockWriter{
-			BlockId:      blockId,
-			RootPath:     rootPath,
-			writer:       writer,
-			eventChannel: eventChannel,
+			BlockId:  blockId,
+			RootPath: rootPath,
+			writer:   writer,
 		}, nil
 	} else {
 		return nil, err
@@ -82,27 +72,6 @@ func (this *LocalBlockWriter) Close() error {
 		if err := os.Rename(this.writer.Name(), path); err == nil {
 			glog.V(2).Infof("Block %v committed", this.BlockId)
 
-			responseChannel := make(chan interface{})
-
-			this.eventChannel <- &BlockWriteEvent{
-				Time:            time.Now(),
-				BlockId:         this.BlockId,
-				Size:            this.Size,
-				ResponseChannel: responseChannel,
-			}
-
-			response := <-responseChannel
-			close(responseChannel)
-
-			glog.V(1).Infof("Received response: %v", response)
-
-			if val, ok := response.(*BlockWriteEvent); ok {
-				if val.BlockId != this.BlockId {
-					return fmt.Errorf("received ack for wrong block: %s", this.BlockId)
-				}
-			} else {
-				return fmt.Errorf("received a non-block write event on ack channel: %s", response)
-			}
 			return nil
 		} else {
 			return err

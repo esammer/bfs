@@ -1,9 +1,7 @@
 package blockservice
 
 import (
-	"bfs/block"
 	"bfs/test"
-	"bfs/volume"
 	"bytes"
 	"context"
 	"fmt"
@@ -24,9 +22,6 @@ func TestBlockService_Read(t *testing.T) {
 	require.NoError(t, err)
 	defer testDir.Destroy()
 
-	eventChannel := make(chan interface{}, 1024)
-	defer close(eventChannel)
-
 	clientCount := 10
 	blockCount := 4
 	maxConcurrency := 8
@@ -40,22 +35,9 @@ func TestBlockService_Read(t *testing.T) {
 	}
 	blocks := make([]*blockVolumePair, 0, clientCount)
 
-	go func() {
-		glog.V(1).Info("Block response service starting")
-
-		for event := range eventChannel {
-			switch e := event.(type) {
-			case *block.BlockWriteEvent:
-				e.ResponseChannel <- e
-			}
-		}
-
-		glog.V(1).Info("Block response service stopped")
-	}()
-
-	pvs := []*volume.PhysicalVolume{
-		volume.NewPhysicalVolume(filepath.Join(testDir.Path, "1"), eventChannel),
-		volume.NewPhysicalVolume(filepath.Join(testDir.Path, "2"), eventChannel),
+	pvs := []*PhysicalVolume{
+		NewPhysicalVolume(filepath.Join(testDir.Path, "1")),
+		NewPhysicalVolume(filepath.Join(testDir.Path, "2")),
 	}
 	defer pvs[0].Close()
 	defer pvs[1].Close()
@@ -194,23 +176,11 @@ func TestBlockService_Delete(t *testing.T) {
 	require.NoError(t, testDir.Create())
 	defer testDir.Destroy()
 
-	eventChannel := make(chan interface{}, 10)
-	defer close(eventChannel)
-
-	go func() {
-		for event := range eventChannel {
-			switch e := event.(type) {
-			case *block.BlockWriteEvent:
-				e.ResponseChannel <- e
-			}
-		}
-	}()
-
-	pv := volume.NewPhysicalVolume(testDir.Path, eventChannel)
+	pv := NewPhysicalVolume(testDir.Path)
 	require.NoError(t, pv.Open(true))
 	defer pv.Close()
 
-	blockService := New([]*volume.PhysicalVolume{pv})
+	blockService := New([]*PhysicalVolume{pv})
 
 	listener, err := net.Listen("tcp", "127.0.0.1:8083")
 	require.NoError(t, err)

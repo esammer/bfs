@@ -7,10 +7,12 @@ PACKAGES = . \
 	$(PROJECT)/ns \
 	$(PROJECT)/nameservice \
 	$(PROJECT)/blockservice \
+	$(PROJECT)/fsservice \
 	$(PROJECT)/host \
+	$(PROJECT)/util/size \
 	$(PROJECT)/test
-PROJECT_DIRS = . volume block ns blockservice nameservice host test
-PROTO_FILES = blockservice/blockservice.pb.go nameservice/nameservice.pb.go
+PROJECT_DIRS = . volume block ns blockservice nameservice fsservice host test util/size
+PROTO_FILES = blockservice/blockservice.pb.go nameservice/nameservice.pb.go fsservice/fsservice.pb.go
 
 .PHONY: help all compile clean check format generate generate-proto deps
 

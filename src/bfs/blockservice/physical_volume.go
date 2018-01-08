@@ -1,6 +1,7 @@
-package volume
+package blockservice
 
 import (
+	"bfs/volumeutil"
 	"errors"
 	"fmt"
 	"github.com/golang/glog"
@@ -17,45 +18,25 @@ import (
  */
 
 type PhysicalVolume struct {
-	ID           uuid.UUID
-	RootPath     string
-	eventChannel chan interface{}
+	ID       uuid.UUID
+	RootPath string
 
-	state VolumeState
+	state volumeutil.VolumeState
 }
 
-type VolumeState int
-
-const (
-	VolumeState_Initial VolumeState = iota
-	VolumeState_Closed
-	VolumeState_Open
-)
-
-var volumeStateStr = []string{
-	"INITIAL",
-	"CLOSED",
-	"OPEN",
-}
-
-func (this *VolumeState) String() string {
-	return volumeStateStr[*this]
-}
-
-func NewPhysicalVolume(rootPath string, eventChannel chan interface{}) *PhysicalVolume {
+func NewPhysicalVolume(rootPath string) *PhysicalVolume {
 	glog.V(1).Infof("Create physical volume at %v", rootPath)
 
 	return &PhysicalVolume{
-		RootPath:     rootPath,
-		eventChannel: eventChannel,
-		state:        VolumeState_Initial,
+		RootPath: rootPath,
+		state:    volumeutil.VolumeState_Initial,
 	}
 }
 
 func (this *PhysicalVolume) Open(allowInitialization bool) error {
 	glog.Infof("Open physical volume at %v", this.RootPath)
 
-	if this.state != VolumeState_Initial {
+	if this.state != volumeutil.VolumeState_Initial {
 		return fmt.Errorf("Can not open volume from state %v", this.state)
 	}
 
@@ -88,7 +69,7 @@ func (this *PhysicalVolume) Open(allowInitialization bool) error {
 	}
 
 	this.ID = id
-	this.state = VolumeState_Open
+	this.state = volumeutil.VolumeState_Open
 
 	glog.Infof("Opened physical volume %s at %s", this.ID, this.RootPath)
 
@@ -98,8 +79,8 @@ func (this *PhysicalVolume) Open(allowInitialization bool) error {
 func (this *PhysicalVolume) Close() error {
 	glog.Infof("Close physical volume at %v", this.RootPath)
 
-	if this.state == VolumeState_Open {
-		this.state = VolumeState_Closed
+	if this.state == volumeutil.VolumeState_Open {
+		this.state = volumeutil.VolumeState_Closed
 	} else {
 		return errors.New("Can not close unopened volume!")
 	}
@@ -108,7 +89,7 @@ func (this *PhysicalVolume) Close() error {
 }
 
 func (this *PhysicalVolume) OpenRead(blockId string) (block.BlockReader, error) {
-	if this.state != VolumeState_Open {
+	if this.state != volumeutil.VolumeState_Open {
 		return nil, fmt.Errorf("Can not create block reader on volume in state %v", this.state)
 	}
 
@@ -116,15 +97,15 @@ func (this *PhysicalVolume) OpenRead(blockId string) (block.BlockReader, error) 
 }
 
 func (this *PhysicalVolume) OpenWrite(blockId string) (block.BlockWriter, error) {
-	if this.state != VolumeState_Open {
+	if this.state != volumeutil.VolumeState_Open {
 		return nil, fmt.Errorf("Can not create block writer on volume in state %v", this.state)
 	}
 
-	return block.NewWriter(this.RootPath, blockId, this.eventChannel)
+	return block.NewWriter(this.RootPath, blockId)
 }
 
 func (this *PhysicalVolume) Delete(blockId string) error {
-	if this.state != VolumeState_Open {
+	if this.state != volumeutil.VolumeState_Open {
 		return fmt.Errorf("Can not create block writer on volume in state %v", this.state)
 	}
 

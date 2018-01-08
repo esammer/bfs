@@ -1,16 +1,8 @@
 package main
 
 import (
-	"bfs/block"
-	"bfs/ns"
-	"bytes"
-	"flag"
-	"fmt"
-	"github.com/golang/glog"
-	"os"
 	"strings"
 
-	"bfs/volume"
 )
 
 type Config struct {
@@ -30,6 +22,11 @@ func (this *ListValue) String() string {
 	return strings.Join(*this, ",")
 }
 
+func main() {
+
+}
+
+/*
 func main() {
 	config := &Config{}
 
@@ -119,3 +116,4 @@ func main() {
 
 	glog.Flush()
 }
+*/
