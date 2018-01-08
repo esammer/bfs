@@ -121,10 +121,8 @@ func (this *LocalFileWriter) Write(buffer []byte) (int, error) {
 				this.filename, this.selectedPvId)
 
 			if err := this.writeStream.Send(&blockservice.WriteRequest{
-				ClientId: "",
 				VolumeId: this.selectedPvId,
 				Buffer:   buffer[bufferPos:bufferPos+writeLen],
-				Seq:      0,
 			}); err != nil {
 				return totalWritten, err
 			}

@@ -4,7 +4,6 @@ import (
 	"bfs/test"
 	"bytes"
 	"context"
-	"fmt"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -83,9 +82,7 @@ func TestBlockService_Read(t *testing.T) {
 
 		for j := 0; j < 2; j++ {
 			err = writer.Send(&WriteRequest{
-				ClientId: fmt.Sprint(i),
 				VolumeId: pvs[i%len(pvs)].ID.String(),
-				Seq:      uint32(j),
 				Buffer:   bytes.Repeat([]byte{0}, blockWriteSize),
 			})
 
@@ -124,14 +121,11 @@ func TestBlockService_Read(t *testing.T) {
 
 			blockSelection := blocks[rand.Intn(len(blocks))]
 
-			iStr := fmt.Sprint(i)
-
 			readStream, err := client.Read(
 				context.Background(),
 				&ReadRequest{
 					VolumeId:  blockSelection.volumeId,
 					BlockId:   blockSelection.blockId,
-					ClientId:  iStr,
 					Position:  0,
 					ChunkSize: uint32(blockReadSize),
 				},
@@ -143,12 +137,9 @@ func TestBlockService_Read(t *testing.T) {
 
 				if response != nil {
 					glog.V(2).Infof(
-						"Received response - client: %v, volumeId: %v, blockId: %v, seq: %v, status: %v buffer len: %d",
-						response.ClientId,
+						"Received response - volumeId: %v, blockId: %v, buffer len: %d",
 						response.VolumeId,
 						response.BlockId,
-						response.Seq,
-						response.Status,
 						len(response.Buffer),
 					)
 				}
@@ -206,9 +197,7 @@ func TestBlockService_Delete(t *testing.T) {
 	require.NoError(t, err)
 
 	err = writerStream.Send(&WriteRequest{
-		ClientId: "1",
 		VolumeId: pv.ID.String(),
-		Seq:      0,
 		Buffer:   []byte{0},
 	})
 	require.NoError(t, err)
@@ -217,7 +206,6 @@ func TestBlockService_Delete(t *testing.T) {
 	require.NoError(t, err)
 
 	deleteResp, err := blockClient.Delete(context.Background(), &ReadRequest{
-		ClientId:  "1",
 		VolumeId:  pv.ID.String(),
 		BlockId:   response.BlockId,
 		ChunkSize: 1024,

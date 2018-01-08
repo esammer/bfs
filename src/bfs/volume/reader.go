@@ -86,7 +86,6 @@ func (this *LocalFileReader) Read(buffer []byte) (int, error) {
 			readStream, err := this.blockClient.Read(context.Background(), &blockservice.ReadRequest{
 				VolumeId:  blockEntry.PvId,
 				BlockId:   blockEntry.BlockId,
-				ClientId:  "",
 				ChunkSize: size.MB,
 				Position:  0,
 			})

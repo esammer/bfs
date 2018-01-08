@@ -9,7 +9,6 @@ enum Status {
 }
 
 message ReadRequest {
-  string clientId = 1;
   string volumeId = 2;
   string blockId = 3;
   uint64 position = 4;
@@ -17,49 +16,29 @@ message ReadRequest {
 }
 
 message ReadResponse {
-  string clientId = 1;
   string volumeId = 2;
   string blockId = 3;
-  uint32 seq = 4;
   bytes buffer = 5;
-  Status status = 6;
 }
 
 message WriteRequest {
-  string clientId = 1;
   string volumeId = 2;
-  uint32 seq = 3;
   bytes buffer = 4;
 }
 
 message WriteResponse {
-  string clientId = 1;
   string volumeId = 2;
   string blockId = 3;
-  uint32 seq = 4;
   uint32 size = 5;
 }
 
 message DeleteResponse {
-  string clientId = 1;
   string volumeId = 2;
   Status status = 3;
-}
-
-message EventRequest {
-  string clientId = 1;
-  string volumeId = 2;
-}
-
-message EventResponse {
-  string clientId = 1;
-  string volumeId = 2;
-  uint64 time = 3;
 }
 
 service BlockService {
   rpc Read (ReadRequest) returns (stream ReadResponse);
   rpc Write (stream WriteRequest) returns (WriteResponse);
   rpc Delete (ReadRequest) returns (DeleteResponse);
-  rpc GetEventStream (EventRequest) returns (stream EventResponse);
 }

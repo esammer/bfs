@@ -41,8 +41,6 @@ func TestBlockServer(t *testing.T) {
 
 	err = writeStream.Send(&blockservice.WriteRequest{
 		VolumeId: server.PhysicalVolumes[0].ID.String(),
-		ClientId: "",
-		Seq:      0,
 		Buffer:   bytes.Repeat([]byte{0}, size.MB),
 	})
 	require.NoError(t, err)

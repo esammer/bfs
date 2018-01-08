@@ -37,7 +37,6 @@ func (this *BlockService) Write(stream BlockService_WriteServer) error {
 
 	var writer block.BlockWriter
 	var blockId string
-	var clientId string
 	var volumeId string
 
 	totalWritten := 0
@@ -48,11 +47,11 @@ func (this *BlockService) Write(stream BlockService_WriteServer) error {
 		request, err := stream.Recv()
 
 		if err == io.EOF {
-			glog.V(2).Infof("Writer iter %d - EOF for client %s", chunkIter, clientId)
+			glog.V(2).Infof("Writer iter %d - EOF", chunkIter)
 
 			break
 		} else if err != nil {
-			glog.Errorf("Writer iter %d - client %s - Error receiving write request - %v", chunkIter, clientId, err)
+			glog.Errorf("Writer iter %d - Error receiving write request - %v", chunkIter, err)
 
 			return err
 		}
@@ -74,15 +73,11 @@ func (this *BlockService) Write(stream BlockService_WriteServer) error {
 			if err != nil {
 				return err
 			}
-
-			clientId = request.ClientId
 		}
 
 		glog.V(2).Infof(
 			"Write iter %d - Received request clientId: %s seqId: %d size: %d",
 			chunkIter,
-			clientId,
-			request.Seq,
 			len(request.Buffer),
 		)
 
@@ -101,9 +96,7 @@ func (this *BlockService) Write(stream BlockService_WriteServer) error {
 	}
 
 	if err := stream.SendAndClose(&WriteResponse{
-		ClientId: clientId,
 		BlockId:  blockId,
-		Seq:      0,
 		VolumeId: volumeId,
 		Size:     uint32(totalWritten),
 	}); err != nil {
@@ -148,12 +141,9 @@ func (this *BlockService) Read(request *ReadRequest, stream BlockService_ReadSer
 
 		if readLen > 0 {
 			response := &ReadResponse{
-				ClientId: request.ClientId,
 				VolumeId: pv.ID.String(),
 				BlockId:  request.BlockId,
 				Buffer:   buffer[:readLen],
-				Seq:      uint32(i),
-				Status:   Status_SUCCESS,
 			}
 
 			if err := stream.Send(response); err != nil {
@@ -186,8 +176,7 @@ func (this *BlockService) Read(request *ReadRequest, stream BlockService_ReadSer
 
 func (this *BlockService) Delete(context context.Context, request *ReadRequest) (*DeleteResponse, error) {
 	glog.V(1).Infof(
-		"Delete request received - clientId: %s volumeId: %s blockId: %s",
-		request.ClientId,
+		"Delete request received - volumeId: %s blockId: %s",
 		request.VolumeId,
 		request.BlockId,
 	)
@@ -206,15 +195,10 @@ func (this *BlockService) Delete(context context.Context, request *ReadRequest) 
 
 	response := &DeleteResponse{
 		VolumeId: request.VolumeId,
-		ClientId: request.ClientId,
 		Status:   Status_SUCCESS,
 	}
 
 	glog.V(1).Infof("Delete request complete - %v", response)
 
 	return response, nil
-}
-
-func (this *BlockService) GetEventStream(request *EventRequest, stream BlockService_GetEventStreamServer) error {
-	return nil
 }
