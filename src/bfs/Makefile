@@ -33,6 +33,8 @@ PROTO_FILES = blockservice/blockservice.pb.go nameservice/nameservice.pb.go fsse
 
 .PHONY: all benchmark check clean compile deps format generate generate-proto help realclean
 
+all: compile check
+
 help:
 	@echo "Supported targets for $(PROJECT):\n\
 	\n\
@@ -52,8 +54,6 @@ help:
 	@if test -z "$(GOPATH)"; then \
 		echo "***WARNING*** GOPATH is not set!"; \
 	fi
-
-all: compile check
 
 deps:
 	$(DEP) ensure
