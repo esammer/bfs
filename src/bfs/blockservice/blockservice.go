@@ -201,3 +201,19 @@ func (this *BlockService) Delete(context context.Context, request *ReadRequest) 
 
 	return response, nil
 }
+
+func (this *BlockService) Volumes(context context.Context, request *VolumeRequest) (*VolumeResponse, error) {
+	glog.V(1).Infof("Volume metadata request")
+
+	volumeIds := make([]string, 0, 8)
+
+	for k := range this.volumeIdx {
+		volumeIds = append(volumeIds, k)
+	}
+
+	response := &VolumeResponse{
+		VolumeId: volumeIds,
+	}
+
+	return response, nil
+}
