@@ -82,7 +82,7 @@ func TestLocalFileWriter_Write(t *testing.T) {
 		pvIds[i] = pv.ID.String()
 	}
 
-	writer := NewWriter(nameClient, blockClient, pvIds, "/test.txt", size.MB, nil)
+	writer := NewWriter(nameClient, blockClient, pvIds, "/test.txt", size.MB)
 
 	writeLen, err := writer.Write(zeroBuf)
 	require.NoError(t, err)
@@ -211,7 +211,7 @@ func BenchmarkLocalFileWriter_Write(b *testing.B) {
 								)
 
 								for i := 0; i < b.N; i++ {
-									writer := NewWriter(nameClient, blockClient, pvIds, "/test.txt", blockSize, nil)
+									writer := NewWriter(nameClient, blockClient, pvIds, "/test.txt", blockSize)
 
 									for j := 0; j < writeCount; j++ {
 										_, err = writer.Write(zeroBuf)

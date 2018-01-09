@@ -3,12 +3,10 @@ package file
 import (
 	"bfs/blockservice"
 	"bfs/nameservice"
-	"bfs/ns"
 	"context"
 	"github.com/golang/glog"
 	"io"
 	"math/rand"
-	"time"
 )
 
 /*
@@ -42,21 +40,7 @@ type LocalFileWriter struct {
 	pvSelectionSeed int
 }
 
-type FileWriteEvent struct {
-	Time            time.Time
-	Volume          string
-	Path            string
-	Size            int
-	Status          ns.FileStatus
-	Blocks          []*nameservice.BlockMetadata
-	ResponseChannel chan error
-}
-
-func NewWriter(nameClient nameservice.NameServiceClient, blockClient blockservice.BlockServiceClient, pvIds []string,
-	filename string,
-	blockSize int,
-	eventChannel chan interface{}) *LocalFileWriter {
-
+func NewWriter(nameClient nameservice.NameServiceClient, blockClient blockservice.BlockServiceClient, pvIds []string, filename string, blockSize int) *LocalFileWriter {
 	glog.V(2).Infof("Allocate writer for %v with blockSize %d", filename, blockSize)
 
 	return &LocalFileWriter{

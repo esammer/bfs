@@ -81,7 +81,7 @@ func TestLocalFileReader_Read(t *testing.T) {
 		pvIds[i] = pv.ID.String()
 	}
 
-	writer := NewWriter(nameClient, blockClient, pvIds, "/test.txt", size.MB, nil)
+	writer := NewWriter(nameClient, blockClient, pvIds, "/test.txt", size.MB)
 
 	_, err = writer.Write(zeroBuf)
 	require.NoError(t, err)

@@ -2,9 +2,9 @@ package main
 
 import (
 	"bfs/blockservice"
+	"bfs/file"
 	"bfs/nameservice"
 	"bfs/ns"
-	"bfs/file"
 	"context"
 	"flag"
 	"fmt"
@@ -137,7 +137,7 @@ func runClient(config *Config) {
 			return
 		}
 
-		writer := file.NewWriter(nameClient, blockClient, pvIds.VolumeId, config.ExtraArgs[2], config.BlockSize, nil)
+		writer := file.NewWriter(nameClient, blockClient, pvIds.VolumeId, config.ExtraArgs[2], config.BlockSize)
 		defer writer.Close()
 
 		written, err := io.Copy(writer, reader)
