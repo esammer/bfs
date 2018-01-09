@@ -169,6 +169,30 @@ func runClient(config *Config) {
 		}
 
 		glog.Infof("Copied %d bytes", written)
+	case "ls":
+		stream, err := nameClient.List(context.Background(), &nameservice.ListRequest{
+			StartKey: config.ExtraArgs[1],
+			EndKey:   config.ExtraArgs[2],
+		})
+		if err != nil {
+			glog.Errorf("%s failed - %v", config.ExtraArgs[0], err)
+			return
+		}
+		defer stream.CloseSend()
+
+		for {
+			resp, err := stream.Recv()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				glog.Errorf("%s failed - %v", config.ExtraArgs[0], err)
+				return
+			}
+
+			for _, entry := range resp.Entries {
+				fmt.Printf("%s %d %d %d\n", entry.Path, entry.Size, entry.BlockSize, len(entry.Blocks))
+			}
+		}
 	default:
 		glog.Errorf("Unknown command %s", config.ExtraArgs[0])
 	}
