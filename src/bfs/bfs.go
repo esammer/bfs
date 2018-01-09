@@ -131,13 +131,11 @@ func runClient(config *Config) {
 		}
 		defer reader.Close()
 
-		pvIds, err := blockClient.Volumes(context.Background(), &blockservice.VolumeRequest{})
+		writer, err := file.NewWriter(nameClient, blockClient, "1", config.ExtraArgs[2], config.BlockSize)
 		if err != nil {
-			glog.Errorf("Unable to get volume metadata - %v", err)
+			glog.Errorf("Unable to open writer %s - %v", config.ExtraArgs[2], err)
 			return
 		}
-
-		writer := file.NewWriter(nameClient, blockClient, pvIds.VolumeIds, config.ExtraArgs[2], config.BlockSize)
 		defer writer.Close()
 
 		written, err := io.Copy(writer, reader)
@@ -216,6 +214,20 @@ func runServer(config *Config) {
 
 	namespace := ns.New(config.NamespacePath)
 	namespace.Open()
+
+	if _, err := namespace.Volume("1"); err != nil {
+		glog.Infof("Initializing logical volume")
+
+		pvIds := make([]string, len(pvs))
+		for i, pv := range pvs {
+			pvIds[i] = pv.ID.String()
+		}
+
+		if err := namespace.AddVolume("1", pvIds); err != nil {
+			glog.Errorf("Unable to initialize logical volume - %v", err)
+			os.Exit(1)
+		}
+	}
 
 	nameService := nameservice.New(namespace)
 	blockService := blockservice.New(pvs)

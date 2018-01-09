@@ -8,6 +8,7 @@ import (
 	"bfs/test"
 	"bfs/util/size"
 	"bytes"
+	"context"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -81,7 +82,10 @@ func TestLocalFileReader_Read(t *testing.T) {
 		pvIds[i] = pv.ID.String()
 	}
 
-	writer := NewWriter(nameClient, blockClient, pvIds, "/test.txt", size.MB)
+	_, err = nameClient.AddVolume(context.Background(), &nameservice.AddVolumeRequest{VolumeId: "1", PvIds: pvIds})
+
+	writer, err := NewWriter(nameClient, blockClient, "1", "/test.txt", size.MB)
+	require.NoError(t, err)
 
 	_, err = writer.Write(zeroBuf)
 	require.NoError(t, err)

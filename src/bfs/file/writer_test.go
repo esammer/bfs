@@ -8,6 +8,7 @@ import (
 	"bfs/test"
 	"bfs/util/size"
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/assert"
@@ -82,7 +83,10 @@ func TestLocalFileWriter_Write(t *testing.T) {
 		pvIds[i] = pv.ID.String()
 	}
 
-	writer := NewWriter(nameClient, blockClient, pvIds, "/test.txt", size.MB)
+	_, err = nameClient.AddVolume(context.Background(), &nameservice.AddVolumeRequest{VolumeId: "1", PvIds: pvIds})
+
+	writer, err := NewWriter(nameClient, blockClient, "1", "/test.txt", size.MB)
+	require.NoError(t, err)
 
 	writeLen, err := writer.Write(zeroBuf)
 	require.NoError(t, err)
@@ -174,6 +178,9 @@ func BenchmarkLocalFileWriter_Write(b *testing.B) {
 		pvIds[i] = pv.ID.String()
 	}
 
+	_, err = nameClient.AddVolume(context.Background(), &nameservice.AddVolumeRequest{VolumeId: "1", PvIds: pvIds})
+	require.NoError(b, err)
+
 	b.ResetTimer()
 
 	for _, fileSize := range fileSizes {
@@ -211,7 +218,8 @@ func BenchmarkLocalFileWriter_Write(b *testing.B) {
 								)
 
 								for i := 0; i < b.N; i++ {
-									writer := NewWriter(nameClient, blockClient, pvIds, "/test.txt", blockSize)
+									writer, err := NewWriter(nameClient, blockClient, "1", "/test.txt", blockSize)
+									require.NoError(b, err)
 
 									for j := 0; j < writeCount; j++ {
 										_, err = writer.Write(zeroBuf)
