@@ -295,6 +295,38 @@ func (this *Namespace) Rename(from string, to string) (bool, error) {
 	return true, this.db.Write(&batch, defaultWriteOpts)
 }
 
+func (this *Namespace) AddVolume(volumeId string, pvIds []string) error {
+	if this.state != namespaceStatus_OPEN {
+		return fmt.Errorf("unable to perform operation in state %v", this.state)
+	}
+
+	value, err := json.Marshal(pvIds)
+	if err != nil {
+		return err
+	}
+
+	return this.db.Put(keyFor(dbPrefix_VolumeMetadata, volumeId), value, defaultWriteOpts)
+}
+
+func (this *Namespace) Volume(volumeId string) ([]string, error) {
+	if this.state != namespaceStatus_OPEN {
+		return nil, fmt.Errorf("unable to perform operation in state %v", this.state)
+	}
+
+	value, err := this.db.Get(keyFor(dbPrefix_VolumeMetadata, volumeId), defaultReadOpts)
+	if err != nil {
+		return nil, err
+	}
+
+	pvIds := make([]string, 0, 128)
+	err = json.Unmarshal(value, &pvIds)
+	if err != nil {
+		return nil, err
+	}
+
+	return pvIds, nil
+}
+
 func (this *Namespace) Close() error {
 	glog.V(1).Infof("Closing namespace at %v", this.path)
 

@@ -21,6 +21,16 @@ func TestNamespace_Open(t *testing.T) {
 	err = ns.Open()
 	require.NoError(t, err, "Open failed")
 
+	require.NoError(t, ns.AddVolume("1", []string{"a", "b", "c"}))
+	require.NoError(t, ns.AddVolume("2", []string{"d", "e", "f"}))
+
+	pvIds, err := ns.Volume("1")
+	require.NoError(t, err)
+	require.Equal(t, []string{"a", "b", "c"}, pvIds)
+	pvIds, err = ns.Volume("2")
+	require.NoError(t, err)
+	require.Equal(t, []string{"d", "e", "f"}, pvIds)
+
 	err = ns.Add(
 		&Entry{
 			VolumeName: "/",
