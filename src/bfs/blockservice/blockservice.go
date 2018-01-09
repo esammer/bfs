@@ -76,19 +76,18 @@ func (this *BlockService) Write(stream BlockService_WriteServer) error {
 		}
 
 		glog.V(2).Infof(
-			"Write iter %d - Received request clientId: %s seqId: %d size: %d",
+			"Write iter %d - Received request size: %d",
 			chunkIter,
 			len(request.Buffer),
 		)
 
 		size, err := writer.Write(request.Buffer)
-		totalWritten += size
-
 		if err != nil {
 			glog.Errorf("Write failed - %v", err)
 			return err
 		}
 
+		totalWritten += size
 	}
 
 	if err := writer.Close(); err != nil {
@@ -103,7 +102,7 @@ func (this *BlockService) Write(stream BlockService_WriteServer) error {
 		return err
 	}
 
-	glog.V(2).Info("Completed write request")
+	glog.V(2).Infof("Completed write request - wrote %d bytes", totalWritten)
 
 	return nil
 }

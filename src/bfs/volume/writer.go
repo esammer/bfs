@@ -79,17 +79,12 @@ func (this *LocalFileWriter) Write(buffer []byte) (int, error) {
 	for bufferRemaining > 0 {
 		writeLen := 0
 
-		// Open a new block.
+		// If we've reached the end of a block, it time to start a new one.
 		if this.blockPos == this.blockSize || this.blockCount == 0 {
-			// Explicitly flush so we can properly track bytes written.
-			flushedLen, err := this.Flush()
-			totalWritten += flushedLen
-			if err != nil {
-				return totalWritten, err
-			}
-
-			if err := this.Close(); err != nil {
-				return totalWritten, err
+			if this.blockCount != 0 {
+				if err := this.Flush(); err != nil {
+					return totalWritten, err
+				}
 			}
 
 			this.blockCount++
@@ -105,7 +100,6 @@ func (this *LocalFileWriter) Write(buffer []byte) (int, error) {
 			this.blockPos = 0
 
 			glog.V(1).Infof("Allocated new block %d on %s - filePos: %d", this.blockCount, this.selectedPvId, this.filePos)
-
 		}
 
 		// Decide how much of the buffer to write.
@@ -131,38 +125,35 @@ func (this *LocalFileWriter) Write(buffer []byte) (int, error) {
 			this.blockPos += writeLen
 			bufferPos += writeLen
 			bufferRemaining -= writeLen
+
+			totalWritten += writeLen
 		}
 	}
 
 	return totalWritten, nil
-}
+};
 
 // Flushes any remaining data to block storage.
 //
-// Upon flush, the size of any data that is actually written is returned along with
-// any errors encountered. Explicit flush calls are not required; both Write() and
-// Close() will call this method as needed. Since Close() does not return the number
-// of bytes written, some applications may wish to explicitly call Flush() to know the
-// full file size prior to close. This method effectively closes the underlying block
-// and, as a result, should not be called unless absolutely necessary. Improper use of
-// flushes may result in short block writes and inefficient block and metadata storage
-// consumption, as well as subsequent read performance. If no block is currently open
-// for write, calling this method has no effect and it will return a write size of zero.
-func (this *LocalFileWriter) Flush() (int, error) {
+// This method effectively closes the underlying block and, as a result,
+// should not be called unless absolutely necessary. Most applications
+// should rely on the internal invocations of this method by Write() and
+// Close(). Improper use of flushes may result in short block writes and
+// inefficient block and metadata storage consumption, as well as subsequent
+// read performance. If no block is currently open for write, calling this
+// method has no effect.
+func (this *LocalFileWriter) Flush() error {
 	glog.V(1).Infof("Flush writer for %s", this.filename)
-
-	totalWritten := 0
 
 	// If a write stream is still open, close the block.
 	if this.writeStream != nil {
 		response, err := this.writeStream.CloseAndRecv()
 		if err != nil {
-			return 0, err
+			return err
 		}
 
 		blockId := response.BlockId
 		pvId := response.VolumeId
-		totalWritten = int(response.Size)
 
 		blockMetadata := &nameservice.BlockMetadata{
 			BlockId: blockId,
@@ -175,15 +166,13 @@ func (this *LocalFileWriter) Flush() (int, error) {
 		glog.V(2).Infof("Received block writer response: %v blockMetadata: %v", response, blockMetadata)
 	}
 
-	glog.V(2).Infof("Flushed %d bytes", totalWritten)
-
-	return totalWritten, nil
+	return nil
 }
 
 func (this *LocalFileWriter) Close() error {
 	glog.V(1).Infof("Closing writer for file %v.", this.filename)
 
-	if _, err := this.Flush(); err != nil {
+	if err := this.Flush(); err != nil {
 		return err
 	}
 

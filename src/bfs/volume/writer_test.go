@@ -75,7 +75,7 @@ func TestLocalFileWriter_Write(t *testing.T) {
 
 	nameClient := nameservice.NewNameServiceClient(nameConn)
 
-	zeroBuf := bytes.Repeat([]byte{0}, size.MB)
+	zeroBuf := bytes.Repeat([]byte{0}, size.KB-1)
 
 	pvIds := make([]string, len(blockServer.PhysicalVolumes))
 	for i, pv := range blockServer.PhysicalVolumes {
@@ -86,11 +86,11 @@ func TestLocalFileWriter_Write(t *testing.T) {
 
 	writeLen, err := writer.Write(zeroBuf)
 	require.NoError(t, err)
+	require.Equal(t, size.KB-1, writeLen)
 
-	flushedLen, err := writer.Flush()
+	err = writer.Flush()
 	require.NoError(t, err)
 
-	writeLen += flushedLen
 	require.Equal(t, len(zeroBuf), writeLen)
 
 	err = writer.Close()
