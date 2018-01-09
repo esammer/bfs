@@ -9,32 +9,32 @@ enum Status {
 }
 
 message ReadRequest {
-  string volumeId = 2;
-  string blockId = 3;
-  uint64 position = 4;
-  uint32 chunkSize = 5;
+  string volumeId = 1;
+  string blockId = 2;
+  uint64 position = 3;
+  uint32 chunkSize = 4;
 }
 
 message ReadResponse {
-  string volumeId = 2;
-  string blockId = 3;
-  bytes buffer = 5;
+  string volumeId = 1;
+  string blockId = 2;
+  bytes buffer = 3;
 }
 
 message WriteRequest {
-  string volumeId = 2;
-  bytes buffer = 4;
+  string volumeId = 1;
+  bytes buffer = 2;
 }
 
 message WriteResponse {
-  string volumeId = 2;
-  string blockId = 3;
-  uint32 size = 5;
+  string volumeId = 1;
+  string blockId = 2;
+  uint32 size = 3;
 }
 
 message DeleteResponse {
-  string volumeId = 2;
-  Status status = 3;
+  string volumeId = 1;
+  Status status = 2;
 }
 
 message VolumeRequest {
