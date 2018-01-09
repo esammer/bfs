@@ -90,8 +90,10 @@ func (this *BlockService) Write(stream BlockService_WriteServer) error {
 		totalWritten += size
 	}
 
-	if err := writer.Close(); err != nil {
-		return nil
+	if writer != nil {
+		if err := writer.Close(); err != nil {
+			return nil
+		}
 	}
 
 	if err := stream.SendAndClose(&WriteResponse{
