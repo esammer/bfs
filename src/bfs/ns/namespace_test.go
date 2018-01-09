@@ -60,7 +60,16 @@ func TestNamespace_Open(t *testing.T) {
 		Status:      FileStatus_Unknown,
 	})
 
-	entries, err := ns.List("/", "/z")
+	entries := make([]*Entry, 0, 8)
+	err = ns.List("/", "/z", func(entry *Entry, err error) (bool, error) {
+		if err != nil {
+			return false, err
+		}
+
+		entries = append(entries, entry)
+		return true, nil
+	})
+	require.NoError(t, err)
 	require.Len(t, entries, 3)
 	require.Equal(
 		t,

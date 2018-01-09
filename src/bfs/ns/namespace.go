@@ -9,6 +9,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"io"
 )
 
 type FileStatus uint8
@@ -208,15 +209,22 @@ func (this *Namespace) Get(path string) (*Entry, error) {
 	return &entry, nil
 }
 
-func (this *Namespace) List(from string, to string) ([]*Entry, error) {
+func (this *Namespace) List(from string, to string, visitor func(*Entry, error) (bool, error)) error {
 	glog.V(1).Infof("Listing entries from %v to %v", from, to)
 
 	if this.state != namespaceStatus_OPEN {
-		return nil, fmt.Errorf("unable to perform operation in state %v", this.state)
+		return fmt.Errorf("unable to perform operation in state %v", this.state)
 	}
 
-	startKey := keyFor(dbPrefix_Entry, from)
-	endKey := keyFor(dbPrefix_Entry, to)
+	var startKey []byte
+	if from != "" {
+		startKey = keyFor(dbPrefix_Entry, from)
+	}
+
+	var endKey []byte
+	if to != "" {
+		endKey = keyFor(dbPrefix_Entry, to)
+	}
 
 	r := &util.Range{
 		Start: startKey,
@@ -226,21 +234,29 @@ func (this *Namespace) List(from string, to string) ([]*Entry, error) {
 	iter := this.db.NewIterator(r, defaultReadOpts)
 	defer iter.Release()
 
-	entries := make([]*Entry, 0, listAllocSize)
-
 	for iter.Next() {
+		if iter.Key()[0] != dbPrefix_Entry {
+			continue
+		}
+
 		var entry Entry
 
 		if err := json.Unmarshal(iter.Value(), &entry); err != nil {
-			return nil, err
+			return err
 		}
 
 		glog.V(2).Infof("Entry: %#v", entry)
 
-		entries = append(entries, &entry)
+		if ok, err := visitor(&entry, nil); err != nil {
+			return err
+		} else if !ok {
+			break
+		}
 	}
 
-	return entries, nil
+	visitor(nil, io.EOF)
+
+	return nil
 }
 
 func (this *Namespace) Delete(path string) error {
