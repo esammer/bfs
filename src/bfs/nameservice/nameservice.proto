@@ -35,6 +35,15 @@ message RenameResponse {
   bool success = 1;
 }
 
+message ListRequest {
+  string startKey = 1;
+  string endKey = 2;
+}
+
+message ListResponse {
+  repeated Entry entries = 1;
+}
+
 message BlockMetadata {
   string blockId = 1;
   string pvId = 2;
@@ -55,4 +64,5 @@ service NameService {
   rpc Add (AddRequest) returns (AddResponse);
   rpc Delete (DeleteRequest) returns (DeleteResponse);
   rpc Rename (RenameRequest) returns (RenameResponse);
+  rpc List (ListRequest) returns (stream ListResponse);
 }

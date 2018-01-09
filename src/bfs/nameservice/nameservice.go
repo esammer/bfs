@@ -3,6 +3,11 @@ package nameservice
 import (
 	"bfs/ns"
 	"context"
+	"io"
+)
+
+const (
+	DefaultListBatchSize = 512
 )
 
 type NameService struct {
@@ -89,4 +94,69 @@ func (this *NameService) Rename(ctx context.Context, request *RenameRequest) (*R
 	return &RenameResponse{
 		Success: ok,
 	}, nil
+}
+
+func (this *NameService) List(request *ListRequest, stream NameService_ListServer) error {
+	var pEntries []*Entry
+
+	err := this.Namespace.List(request.StartKey, request.EndKey, func(entry *ns.Entry, err error) (bool, error) {
+		if err == io.EOF {
+			err := stream.Send(&ListResponse{
+				Entries: pEntries,
+			})
+			if err != nil {
+				return false, err
+			}
+
+			pEntries = nil
+
+			return false, io.EOF
+		} else if err != nil {
+			return false, err
+		}
+
+		if len(pEntries) == DefaultListBatchSize {
+			err := stream.Send(&ListResponse{
+				Entries: pEntries,
+			})
+			if err != nil {
+				return false, err
+			}
+
+			pEntries = nil
+		}
+
+		if pEntries == nil {
+			pEntries = make([]*Entry, 0, DefaultListBatchSize)
+		}
+
+		blocks := make([]*BlockMetadata, 0, len(entry.Blocks))
+
+		for _, block := range entry.Blocks {
+			pBlock := &BlockMetadata{
+				BlockId: block.Block,
+				PvId:    block.PVID,
+			}
+
+			blocks = append(blocks, pBlock)
+		}
+
+		pEntries = append(pEntries, &Entry{
+			Path:             entry.Path,
+			Size:             entry.Size,
+			ReplicationLevel: entry.ReplicationLevel,
+			BlockSize:        entry.BlockSize,
+			LvId:             entry.VolumeName,
+			Permissions:      uint32(entry.Permissions),
+			Blocks:           blocks,
+		})
+
+		return true, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
