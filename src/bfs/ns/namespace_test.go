@@ -2,7 +2,9 @@ package ns
 
 import (
 	"bfs/test"
+	"bfs/util/size"
 	"bytes"
+	"fmt"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 	"path/filepath"
@@ -124,4 +126,162 @@ func TestNamespace_keyFor(t *testing.T) {
 		),
 		key,
 	)
+}
+
+func BenchmarkNamespace(b *testing.B) {
+	testDir := test.New("build", "test", b.Name())
+	err := testDir.Create()
+	require.NoError(b, err)
+
+	ns := New(filepath.Join(testDir.Path, "/db"))
+
+	err = ns.Open()
+	require.NoError(b, err, "Open failed")
+	defer ns.Close()
+
+	b.ResetTimer()
+
+	b.Run("Add", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			err = ns.Add(
+				&Entry{
+					VolumeName:       "/",
+					Path:             fmt.Sprintf("/a%d.txt", i),
+					BlockSize:        size.MB,
+					Size:             10 * size.MB,
+					Permissions:      0,
+					ReplicationLevel: 1,
+					Status:           FileStatus_OK,
+					Blocks: []*BlockMetadata{
+						{Block: "1", LVName: "/", PVID: "1"},
+						{Block: "2", LVName: "/", PVID: "1"},
+						{Block: "3", LVName: "/", PVID: "1"},
+						{Block: "4", LVName: "/", PVID: "1"},
+						{Block: "5", LVName: "/", PVID: "1"},
+						{Block: "5", LVName: "/", PVID: "1"},
+						{Block: "6", LVName: "/", PVID: "1"},
+						{Block: "7", LVName: "/", PVID: "1"},
+						{Block: "8", LVName: "/", PVID: "1"},
+						{Block: "9", LVName: "/", PVID: "1"},
+						{Block: "10", LVName: "/", PVID: "1"},
+					},
+				},
+			)
+			require.NoError(b, err)
+		}
+	})
+	b.Run("Delete", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			err := ns.Delete(fmt.Sprintf("/b%d.txt", i))
+			require.NoError(b, err)
+		}
+	})
+	b.Run("List", func(b *testing.B) {
+		b.StopTimer()
+		for i := 0; i < 1000; i++ {
+			err = ns.Add(
+				&Entry{
+					VolumeName:       "/",
+					Path:             fmt.Sprintf("/c%d.txt", i),
+					BlockSize:        size.MB,
+					Size:             10 * size.MB,
+					Permissions:      0,
+					ReplicationLevel: 1,
+					Status:           FileStatus_OK,
+					Blocks: []*BlockMetadata{
+						{Block: "1", LVName: "/", PVID: "1"},
+						{Block: "2", LVName: "/", PVID: "1"},
+						{Block: "3", LVName: "/", PVID: "1"},
+						{Block: "4", LVName: "/", PVID: "1"},
+						{Block: "5", LVName: "/", PVID: "1"},
+						{Block: "5", LVName: "/", PVID: "1"},
+						{Block: "6", LVName: "/", PVID: "1"},
+						{Block: "7", LVName: "/", PVID: "1"},
+						{Block: "8", LVName: "/", PVID: "1"},
+						{Block: "9", LVName: "/", PVID: "1"},
+						{Block: "10", LVName: "/", PVID: "1"},
+					},
+				},
+			)
+			require.NoError(b, err)
+		}
+		b.StartTimer()
+
+		for i := 0; i < b.N; i++ {
+			ns.List("", "", func(entry *Entry, err error) (bool, error) {
+				return true, nil
+			})
+		}
+	})
+	b.Run("Get", func(b *testing.B) {
+		b.StopTimer()
+		for i := 0; i < 1000; i++ {
+			err = ns.Add(
+				&Entry{
+					VolumeName:       "/",
+					Path:             fmt.Sprintf("/d%d.txt", i),
+					BlockSize:        size.MB,
+					Size:             10 * size.MB,
+					Permissions:      0,
+					ReplicationLevel: 1,
+					Status:           FileStatus_OK,
+					Blocks: []*BlockMetadata{
+						{Block: "1", LVName: "/", PVID: "1"},
+						{Block: "2", LVName: "/", PVID: "1"},
+						{Block: "3", LVName: "/", PVID: "1"},
+						{Block: "4", LVName: "/", PVID: "1"},
+						{Block: "5", LVName: "/", PVID: "1"},
+						{Block: "5", LVName: "/", PVID: "1"},
+						{Block: "6", LVName: "/", PVID: "1"},
+						{Block: "7", LVName: "/", PVID: "1"},
+						{Block: "8", LVName: "/", PVID: "1"},
+						{Block: "9", LVName: "/", PVID: "1"},
+						{Block: "10", LVName: "/", PVID: "1"},
+					},
+				},
+			)
+			require.NoError(b, err)
+		}
+		b.StartTimer()
+
+		for i := 0; i < b.N; i++ {
+			// Purposefully cause a small number of misses.
+			ns.Get(fmt.Sprintf("/d%d.txt", i%1010))
+		}
+	})
+	b.Run("Rename", func(b *testing.B) {
+		b.StopTimer()
+		err = ns.Add(
+			&Entry{
+				VolumeName:       "/",
+				Path:             "0",
+				BlockSize:        size.MB,
+				Size:             10 * size.MB,
+				Permissions:      0,
+				ReplicationLevel: 1,
+				Status:           FileStatus_OK,
+				Blocks: []*BlockMetadata{
+					{Block: "1", LVName: "/", PVID: "1"},
+					{Block: "2", LVName: "/", PVID: "1"},
+					{Block: "3", LVName: "/", PVID: "1"},
+					{Block: "4", LVName: "/", PVID: "1"},
+					{Block: "5", LVName: "/", PVID: "1"},
+					{Block: "5", LVName: "/", PVID: "1"},
+					{Block: "6", LVName: "/", PVID: "1"},
+					{Block: "7", LVName: "/", PVID: "1"},
+					{Block: "8", LVName: "/", PVID: "1"},
+					{Block: "9", LVName: "/", PVID: "1"},
+					{Block: "10", LVName: "/", PVID: "1"},
+				},
+			},
+		)
+		require.NoError(b, err)
+		b.StartTimer()
+
+		for i := 0; i < b.N; i++ {
+			ok, err := ns.Rename(fmt.Sprint(i), fmt.Sprint(i+1))
+			require.NoError(b, err)
+			require.True(b, ok)
+		}
+	})
 }
