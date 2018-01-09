@@ -63,7 +63,7 @@ func TestBlockService_Read(t *testing.T) {
 		glog.V(1).Info("RPC server stopped")
 	}()
 
-	conn, err := grpc.Dial(bindAddress, grpc.WithInsecure(), grpc.WithWriteBufferSize(1024*1024),
+	conn, err := grpc.Dial(bindAddress, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithWriteBufferSize(1024*1024),
 		grpc.WithReadBufferSize(1024*1024))
 	require.NoError(t, err)
 	defer conn.Close()
