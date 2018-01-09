@@ -214,7 +214,7 @@ func (this *BlockService) Volumes(context context.Context, request *VolumeReques
 	}
 
 	response := &VolumeResponse{
-		VolumeId: volumeIds,
+		VolumeIds: volumeIds,
 	}
 
 	return response, nil

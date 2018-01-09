@@ -137,7 +137,7 @@ func runClient(config *Config) {
 			return
 		}
 
-		writer := file.NewWriter(nameClient, blockClient, pvIds.VolumeId, config.ExtraArgs[2], config.BlockSize)
+		writer := file.NewWriter(nameClient, blockClient, pvIds.VolumeIds, config.ExtraArgs[2], config.BlockSize)
 		defer writer.Close()
 
 		written, err := io.Copy(writer, reader)

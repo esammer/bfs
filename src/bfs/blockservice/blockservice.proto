@@ -42,7 +42,7 @@ message VolumeRequest {
 }
 
 message VolumeResponse {
-  repeated string volumeId = 1;
+  repeated string volumeIds = 1;
 }
 
 service BlockService {
