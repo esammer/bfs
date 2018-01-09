@@ -32,11 +32,14 @@ func (this *FileStatus) String() string {
 }
 
 type Entry struct {
-	VolumeName  string
-	Path        string
-	Blocks      []*BlockMetadata
-	Permissions uint8
-	Status      FileStatus
+	VolumeName       string
+	Path             string
+	Blocks           []*BlockMetadata
+	Permissions      uint8
+	Status           FileStatus
+	BlockSize        uint64
+	Size             uint64
+	ReplicationLevel uint32
 }
 
 type BlockMetadata struct {

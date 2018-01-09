@@ -178,10 +178,13 @@ func (this *LocalFileWriter) Close() error {
 
 	_, err := this.nameClient.Add(context.Background(), &nameservice.AddRequest{
 		Entry: &nameservice.Entry{
-			Path:        this.filename,
-			Blocks:      this.blockList,
-			Permissions: 0,
-			LvId:        "/",
+			Path:             this.filename,
+			Blocks:           this.blockList,
+			Permissions:      0,
+			LvId:             "/",
+			ReplicationLevel: 1,
+			BlockSize:        uint64(this.blockSize),
+			Size:             uint64(this.filePos),
 		},
 	})
 	if err != nil {

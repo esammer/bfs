@@ -36,10 +36,13 @@ func (this *NameService) Get(ctx context.Context, request *GetRequest) (*GetResp
 
 	return &GetResponse{
 		Entry: &Entry{
-			Path:        entry.Path,
-			LvId:        entry.VolumeName,
-			Blocks:      blocks,
-			Permissions: uint32(entry.Permissions),
+			Path:             entry.Path,
+			LvId:             entry.VolumeName,
+			Blocks:           blocks,
+			Permissions:      uint32(entry.Permissions),
+			BlockSize:        entry.BlockSize,
+			ReplicationLevel: entry.ReplicationLevel,
+			Size:             entry.Size,
 		},
 	}, nil
 }
@@ -56,11 +59,14 @@ func (this *NameService) Add(ctx context.Context, request *AddRequest) (*AddResp
 	}
 
 	entry := &ns.Entry{
-		Path:        request.Entry.Path,
-		VolumeName:  request.Entry.LvId,
-		Blocks:      blocks,
-		Permissions: uint8(request.Entry.Permissions),
-		Status:      ns.FileStatus_OK,
+		Path:             request.Entry.Path,
+		VolumeName:       request.Entry.LvId,
+		Blocks:           blocks,
+		Permissions:      uint8(request.Entry.Permissions),
+		Status:           ns.FileStatus_OK,
+		BlockSize:        request.Entry.BlockSize,
+		Size:             request.Entry.Size,
+		ReplicationLevel: request.Entry.ReplicationLevel,
 	}
 
 	if err := this.Namespace.Add(entry); err != nil {

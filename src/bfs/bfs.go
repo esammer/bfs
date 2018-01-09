@@ -142,10 +142,16 @@ func runClient(config *Config) {
 			return
 		}
 
-		fmt.Printf("%s (%d blocks)\n", resp.Entry.Path, len(resp.Entry.Blocks))
+		fmt.Printf("%s %d (%d blocks, %d replica(s), %d block size)\n",
+			resp.Entry.Path,
+			resp.Entry.Size,
+			len(resp.Entry.Blocks),
+			resp.Entry.ReplicationLevel,
+			resp.Entry.BlockSize,
+		)
 
 		for i, block := range resp.Entry.Blocks {
-			fmt.Printf("  %3d: %s (%s)\n", i, block.BlockId, block.PvId)
+			fmt.Printf("  %3d: block: %s pv: %s\n", i, block.BlockId, block.PvId)
 		}
 	}
 }
