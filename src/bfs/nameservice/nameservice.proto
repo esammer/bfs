@@ -44,6 +44,23 @@ message ListResponse {
   repeated Entry entries = 1;
 }
 
+message AddVolumeRequest {
+  string volumeId = 1;
+  repeated string pvIds = 2;
+}
+
+message AddVolumeResponse {
+
+}
+
+message VolumeInfoRequest {
+  string volumeId = 1;
+}
+
+message VolumeInfoResponse {
+  repeated string pvIds = 1;
+}
+
 message BlockMetadata {
   string blockId = 1;
   string pvId = 2;
@@ -65,4 +82,7 @@ service NameService {
   rpc Delete (DeleteRequest) returns (DeleteResponse);
   rpc Rename (RenameRequest) returns (RenameResponse);
   rpc List (ListRequest) returns (stream ListResponse);
+
+  rpc AddVolume(AddVolumeRequest) returns (AddVolumeResponse);
+  rpc VolumeInfo (VolumeInfoRequest) returns (VolumeInfoResponse);
 }

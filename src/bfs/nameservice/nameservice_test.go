@@ -50,6 +50,21 @@ func TestNameService(t *testing.T) {
 
 	serviceClient := NewNameServiceClient(conn)
 
+	t.Run("AddVolume", func(t *testing.T) {
+		defer glog.Flush()
+
+		resp, err := serviceClient.AddVolume(context.Background(), &AddVolumeRequest{VolumeId: "1", PvIds: []string{"a", "b", "c"}})
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+	})
+	t.Run("VolumeInfo", func(t *testing.T) {
+		defer glog.Flush()
+
+		resp, err := serviceClient.VolumeInfo(context.Background(), &VolumeInfoRequest{VolumeId: "1"})
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		require.Equal(t, []string{"a", "b", "c"}, resp.PvIds)
+	})
 	t.Run("Add", func(t *testing.T) {
 		defer glog.Flush()
 
@@ -64,9 +79,9 @@ func TestNameService(t *testing.T) {
 						LvId:        "1",
 						Path:        fmt.Sprintf("/test%d.txt", i),
 						Permissions: 0,
-						Blocks:      []*BlockMetadata{
-							{PvId:"a", BlockId:"1"},
-							{PvId:"a", BlockId:"2"},
+						Blocks: []*BlockMetadata{
+							{PvId: "a", BlockId: "1"},
+							{PvId: "a", BlockId: "2"},
 						},
 					},
 				})
