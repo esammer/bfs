@@ -24,10 +24,9 @@ type Config struct {
 	AllowInitialization bool
 	BindAddress         string
 
-	PutFile   string
-	GetFile   string
-	StatPath  string
 	BlockSize int
+
+	ExtraArgs []string
 }
 
 type ListValue []string
@@ -47,9 +46,6 @@ func main() {
 	clientFlags := flag.NewFlagSet("client", flag.ContinueOnError)
 	clientFlags.StringVar(&config.BindAddress, "server", "", "server host:port")
 	clientFlags.IntVar(&config.BlockSize, "block-size", 0, "block size for write (in MB)")
-	clientFlags.StringVar(&config.PutFile, "put", "", "put file")
-	clientFlags.StringVar(&config.GetFile, "get", "", "get file")
-	clientFlags.StringVar(&config.StatPath, "stat", "", "stat a file")
 	flag.CommandLine.VisitAll(func(f *flag.Flag) {
 		clientFlags.Var(f.Value, f.Name, f.Usage)
 	})
@@ -71,9 +67,11 @@ func main() {
 		switch args[1] {
 		case "client":
 			clientFlags.Parse(args[2:])
+			config.ExtraArgs = clientFlags.Args()
 			runClient(config)
 		case "server":
 			serverFlags.Parse(args[2:])
+			config.ExtraArgs = clientFlags.Args()
 			runServer(config)
 		}
 	}
@@ -89,56 +87,28 @@ func runClient(config *Config) {
 	nameClient := nameservice.NewNameServiceClient(conn)
 	blockClient := blockservice.NewBlockServiceClient(conn)
 
-	if len(config.PutFile) != 0 {
-		reader, err := os.Open(config.PutFile)
+	switch config.ExtraArgs[0] {
+	case "rm":
+		for _, path := range config.ExtraArgs[1:] {
+			_, err := nameClient.Delete(context.Background(), &nameservice.DeleteRequest{Path: path})
+			if err != nil {
+				glog.Errorf("%s failed - %v", config.ExtraArgs[0], err)
+				return
+			}
+		}
+	case "mv":
+		_, err := nameClient.Rename(context.Background(), &nameservice.RenameRequest{
+			SourcePath:      config.ExtraArgs[1],
+			DestinationPath: config.ExtraArgs[2],
+		})
 		if err != nil {
-			glog.Errorf("Unable to open %s - %v", config.PutFile, err)
+			glog.Errorf("%s failed - %v", config.ExtraArgs[0], err)
 			return
 		}
-		defer reader.Close()
-
-		pvIds, err := blockClient.Volumes(context.Background(), &blockservice.VolumeRequest{})
+	case "stat":
+		resp, err := nameClient.Get(context.Background(), &nameservice.GetRequest{Path: config.ExtraArgs[1]})
 		if err != nil {
-			glog.Errorf("Unable to get volume metadata - %v", err)
-			return
-		}
-
-		writer := volume.NewWriter(nameClient, blockClient, pvIds.VolumeId, config.PutFile, config.BlockSize, nil)
-		defer writer.Close()
-
-		written, err := io.Copy(writer, reader)
-		if err != nil {
-			glog.Errorf("Failed to copy %s - %v", config.PutFile, err)
-			return
-		}
-
-		glog.Infof("Copied %d bytes", written)
-	} else if len(config.GetFile) != 0 {
-		reader := volume.NewReader(nameClient, blockClient, config.GetFile)
-		if err := reader.Open(); err != nil {
-			glog.Errorf("Failed to open file reader - %v", err)
-			return
-		}
-		defer reader.Close()
-
-		writer, err := os.Create(config.GetFile + ".new")
-		if err != nil {
-			glog.Errorf("Unable to open %s.new for write - %v", config.GetFile, err)
-			return
-		}
-		defer writer.Close()
-
-		written, err := io.Copy(writer, reader)
-		if err != nil {
-			glog.Errorf("Unable to copy file - %v", err)
-			return
-		}
-
-		glog.Infof("Copied %d bytes", written)
-	} else if len(config.StatPath) != 0 {
-		resp, err := nameClient.Get(context.Background(), &nameservice.GetRequest{Path: config.StatPath})
-		if err != nil {
-			glog.Errorf("Stat failed - %v", err)
+			glog.Errorf("%s failed - %v", config.ExtraArgs[0], err)
 			return
 		}
 
@@ -153,6 +123,54 @@ func runClient(config *Config) {
 		for i, block := range resp.Entry.Blocks {
 			fmt.Printf("  %3d: block: %s pv: %s\n", i, block.BlockId, block.PvId)
 		}
+	case "put":
+		reader, err := os.Open(config.ExtraArgs[1])
+		if err != nil {
+			glog.Errorf("Unable to open %s - %v", config.ExtraArgs[1], err)
+			return
+		}
+		defer reader.Close()
+
+		pvIds, err := blockClient.Volumes(context.Background(), &blockservice.VolumeRequest{})
+		if err != nil {
+			glog.Errorf("Unable to get volume metadata - %v", err)
+			return
+		}
+
+		writer := volume.NewWriter(nameClient, blockClient, pvIds.VolumeId, config.ExtraArgs[2], config.BlockSize, nil)
+		defer writer.Close()
+
+		written, err := io.Copy(writer, reader)
+		if err != nil {
+			glog.Errorf("Failed to copy %s to %s - %v", config.ExtraArgs[1], config.ExtraArgs[2], err)
+			return
+		}
+
+		glog.Infof("Copied %d bytes", written)
+	case "get":
+		reader := volume.NewReader(nameClient, blockClient, config.ExtraArgs[1])
+		if err := reader.Open(); err != nil {
+			glog.Errorf("Failed to open file reader - %v", err)
+			return
+		}
+		defer reader.Close()
+
+		writer, err := os.Create(config.ExtraArgs[2])
+		if err != nil {
+			glog.Errorf("Unable to open %s for write - %v", config.ExtraArgs[2], err)
+			return
+		}
+		defer writer.Close()
+
+		written, err := io.Copy(writer, reader)
+		if err != nil {
+			glog.Errorf("Unable to copy file - %v", err)
+			return
+		}
+
+		glog.Infof("Copied %d bytes", written)
+	default:
+		glog.Errorf("Unknown command %s", config.ExtraArgs[0])
 	}
 }
 
