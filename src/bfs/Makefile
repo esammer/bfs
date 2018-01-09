@@ -4,6 +4,7 @@ DEP = dep
 PACKAGES = . \
 	$(PROJECT)/block \
 	$(PROJECT)/blockservice \
+	$(PROJECT)/file \
 	$(PROJECT)/fsservice \
 	$(PROJECT)/host \
 	$(PROJECT)/lru \
@@ -13,11 +14,11 @@ PACKAGES = . \
 	$(PROJECT)/server/nameserver \
 	$(PROJECT)/test \
 	$(PROJECT)/util/size \
-	$(PROJECT)/volume \
 	$(PROJECT)/volumeutil
 PROJECT_DIRS = . \
 	block \
 	blockservice \
+	file \
 	fsservice \
 	host \
 	lru \
@@ -27,7 +28,6 @@ PROJECT_DIRS = . \
 	server/nameserver \
 	test \
 	util/size \
-	volume \
 	volumeutil
 PROTO_FILES = blockservice/blockservice.pb.go nameservice/nameservice.pb.go fsservice/fsservice.pb.go
 

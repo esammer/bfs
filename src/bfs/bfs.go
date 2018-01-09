@@ -4,7 +4,7 @@ import (
 	"bfs/blockservice"
 	"bfs/nameservice"
 	"bfs/ns"
-	"bfs/volume"
+	"bfs/file"
 	"context"
 	"flag"
 	"fmt"
@@ -137,7 +137,7 @@ func runClient(config *Config) {
 			return
 		}
 
-		writer := volume.NewWriter(nameClient, blockClient, pvIds.VolumeId, config.ExtraArgs[2], config.BlockSize, nil)
+		writer := file.NewWriter(nameClient, blockClient, pvIds.VolumeId, config.ExtraArgs[2], config.BlockSize, nil)
 		defer writer.Close()
 
 		written, err := io.Copy(writer, reader)
@@ -148,7 +148,7 @@ func runClient(config *Config) {
 
 		glog.Infof("Copied %d bytes", written)
 	case "get":
-		reader := volume.NewReader(nameClient, blockClient, config.ExtraArgs[1])
+		reader := file.NewReader(nameClient, blockClient, config.ExtraArgs[1])
 		if err := reader.Open(); err != nil {
 			glog.Errorf("Failed to open file reader - %v", err)
 			return
