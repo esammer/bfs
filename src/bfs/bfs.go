@@ -14,8 +14,10 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 type Config struct {
@@ -191,6 +193,20 @@ func runClient(config *Config) {
 				fmt.Printf("%s %d %d %d\n", entry.Path, entry.Size, entry.BlockSize, len(entry.Blocks))
 			}
 		}
+	case "hosts":
+		resp, err := nameClient.Hosts(context.Background(), &nameservice.HostsRequest{})
+		if err != nil {
+			glog.Errorf("%s failed - %v", config.ExtraArgs[0], err)
+			return
+		}
+
+		for i, entry := range resp.Hosts {
+			fmt.Printf("  %04d: %s (%s) last seen: %s\n", i+1, entry.Hostname, entry.Id, time.Unix(entry.LastSeen, 0).String())
+
+			for i, pvId := range entry.PvIds {
+				fmt.Printf("    %02d: %s\n", i+1, pvId)
+			}
+		}
 	default:
 		glog.Errorf("Unknown command %s", config.ExtraArgs[0])
 	}
@@ -215,13 +231,13 @@ func runServer(config *Config) {
 	namespace := ns.New(config.NamespacePath)
 	namespace.Open()
 
+	pvIds := make([]string, len(pvs))
+	for i, pv := range pvs {
+		pvIds[i] = pv.ID.String()
+	}
+
 	if _, err := namespace.Volume("1"); err != nil {
 		glog.Infof("Initializing logical volume")
-
-		pvIds := make([]string, len(pvs))
-		for i, pv := range pvs {
-			pvIds[i] = pv.ID.String()
-		}
 
 		if err := namespace.AddVolume("1", pvIds); err != nil {
 			glog.Errorf("Unable to initialize logical volume - %v", err)
@@ -255,13 +271,41 @@ func runServer(config *Config) {
 	}()
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
+	ticker := time.NewTicker(10 * time.Second)
 	rpcQuitChan := make(chan error)
 
 	go func() {
 		err := server.Serve(listener)
+		ticker.Stop()
 		rpcQuitChan <- err
 	}()
 
+	go func() {
+		hostname, portStr, err := net.SplitHostPort(config.BindAddress)
+		if err != nil {
+			glog.Errorf("Unable to determine host and port from %s - %v", config.BindAddress, err)
+			return
+		}
+
+		port, err := strconv.ParseUint(portStr, 10, 32)
+		if err != nil {
+			glog.Errorf("Unable to parse port from %s - %v", portStr, err)
+			return
+		}
+
+		for t := range ticker.C {
+			_, err := nameService.HostReport(context.Background(), &nameservice.HostReportRequest{
+				Id:       "1",
+				Hostname: hostname,
+				PvIds:    pvIds,
+				Port:     uint32(port),
+			})
+
+			if err != nil {
+				glog.Errorf("Unable to report host status %s - %v", t.String(), err)
+			}
+		}
+	}()
 	glog.Infof("Server running on %s - use SIGINT to stop", config.BindAddress)
 
 	err = <-rpcQuitChan
