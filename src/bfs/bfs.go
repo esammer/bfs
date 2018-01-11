@@ -330,6 +330,7 @@ func runServer(config *Config) {
 					glog.Errorf("Unable to get filesystem info for %s - %v", path, err)
 					continue
 				}
+
 				devicePath := make([]rune, 0, 1024)
 				for _, c := range fsStat.Mntfromname {
 					devicePath = append(devicePath, rune(c))
@@ -338,19 +339,6 @@ func runServer(config *Config) {
 				for _, c := range fsStat.Mntonname {
 					mountPath = append(mountPath, rune(c))
 				}
-				glog.Infof("%s device: %s, mountPath: %s, blocks: %d, bsize: %d, bfree: %d, bavail: %d, files: %d, "+
-					"ffree: %d, io size: %d",
-					path,
-					string(devicePath),
-					string(mountPath),
-					fsStat.Blocks,
-					fsStat.Bsize,
-					fsStat.Bfree,
-					fsStat.Bavail,
-					fsStat.Files,
-					fsStat.Ffree,
-					fsStat.Iosize,
-				)
 
 				volumeStat := &nameservice.PhysicalVolumeStatus{
 					Path: path,
