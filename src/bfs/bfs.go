@@ -224,13 +224,16 @@ func runClient(config *Config) {
 						uint64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.BlockSize),
 				))
 
-				fmt.Printf("%18d: %s %.02fGB total, %.2fGB %.2f%% free\n",
+				fmt.Printf("%18d: %s - pv path: %s fs: %.02fGB total, %.2fGB %.2f%% free, %s at %s\n",
 					j+1,
 					pvId,
+					resp.Hosts[i].VolumeStats[j].Path,
 					bytesTotal.ToGigabytes(),
 					bytesFree.ToGigabytes(),
 					100* (float64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.BlocksFree) /
 						float64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.Blocks)),
+					resp.Hosts[i].VolumeStats[j].FileSystemStatus.DevicePath,
+					resp.Hosts[i].VolumeStats[j].FileSystemStatus.MountPath,
 				)
 			}
 
