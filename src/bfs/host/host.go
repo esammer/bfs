@@ -19,7 +19,7 @@ type Host struct {
 }
 
 type HostConfig struct {
-	RootPath      string
+	Path          string
 	BindInterface string
 }
 
@@ -49,7 +49,7 @@ func (this *Host) discoverIdentity() error {
 
 	this.Hostname = hostname
 
-	idPath := filepath.Join(this.Config.RootPath, "id")
+	idPath := filepath.Join(this.Config.Path, "id")
 
 	_, err = os.Stat(idPath)
 	if err != nil {

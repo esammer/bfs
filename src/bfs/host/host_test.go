@@ -17,7 +17,7 @@ func TestHost_New(t *testing.T) {
 	os.Mkdir(filepath.Join(testDir.Path, "a"), 0755)
 
 	config := &HostConfig{
-		RootPath: testDir.Path,
+		Path: testDir.Path,
 	}
 
 	host, err := New(config)
