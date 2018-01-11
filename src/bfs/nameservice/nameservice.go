@@ -21,12 +21,13 @@ type NameService struct {
 }
 
 type Host struct {
-	id        string
-	hostname  string
-	port      uint32
-	pvIds     []string
-	firstSeen time.Time
-	lastSeen  time.Time
+	id          string
+	hostname    string
+	port        uint32
+	pvIds       []string
+	firstSeen   time.Time
+	lastSeen    time.Time
+	volumeStats []*PhysicalVolumeStatus
 }
 
 func New(namespace *ns.Namespace) *NameService {
@@ -195,12 +196,13 @@ func (this *NameService) AddVolume(ctx context.Context, request *AddVolumeReques
 
 func (this *NameService) HostReport(ctx context.Context, request *HostReportRequest) (*HostReportResponse, error) {
 	host := &Host{
-		id:        request.Id,
-		hostname:  request.Hostname,
-		port:      request.Port,
-		pvIds:     request.PvIds,
-		firstSeen: time.Now(),
-		lastSeen:  time.Now(),
+		id:          request.Id,
+		hostname:    request.Hostname,
+		port:        request.Port,
+		pvIds:       request.PvIds,
+		firstSeen:   time.Now(),
+		lastSeen:    time.Now(),
+		volumeStats: request.VolumeStats,
 	}
 
 	var distance time.Duration
@@ -227,12 +229,13 @@ func (this *NameService) Hosts(ctx context.Context, request *HostsRequest) (*Hos
 
 	for _, entry := range this.hostRegistry {
 		hosts = append(hosts, &KnownHost{
-			Id:        entry.id,
-			PvIds:     entry.pvIds,
-			Hostname:  entry.hostname,
-			Port:      entry.port,
-			FirstSeen: entry.firstSeen.Unix(),
-			LastSeen:  entry.lastSeen.Unix(),
+			Id:          entry.id,
+			PvIds:       entry.pvIds,
+			Hostname:    entry.hostname,
+			Port:        entry.port,
+			FirstSeen:   entry.firstSeen.Unix(),
+			LastSeen:    entry.lastSeen.Unix(),
+			VolumeStats: entry.volumeStats,
 		})
 	}
 

@@ -5,6 +5,7 @@ import (
 	"bfs/file"
 	"bfs/nameservice"
 	"bfs/ns"
+	"bfs/util/size"
 	"context"
 	"flag"
 	"fmt"
@@ -213,8 +214,24 @@ func runClient(config *Config) {
 				"volumes",
 			)
 
-			for i, pvId := range entry.PvIds {
-				fmt.Printf("%18d: %s\n", i+1, pvId)
+			for j, pvId := range entry.PvIds {
+				bytesTotal := size.Bytes(float64(
+					resp.Hosts[i].VolumeStats[j].FileSystemStatus.Blocks *
+						uint64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.BlockSize),
+				))
+				bytesFree := size.Bytes(float64(
+					resp.Hosts[i].VolumeStats[j].FileSystemStatus.BlocksFree *
+						uint64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.BlockSize),
+				))
+
+				fmt.Printf("%18d: %s %.02fGB total, %.2fGB %.2f%% free\n",
+					j+1,
+					pvId,
+					bytesTotal.ToGigabytes(),
+					bytesFree.ToGigabytes(),
+					100* (float64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.BlocksFree) /
+						float64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.Blocks)),
+				)
 			}
 		}
 	default:
@@ -304,11 +321,60 @@ func runServer(config *Config) {
 		}
 
 		for t := range ticker.C {
+			volumeStats := make([]*nameservice.PhysicalVolumeStatus, 0, len(config.VolumePaths))
+
+			for _, path := range config.VolumePaths {
+				fsStat := syscall.Statfs_t{}
+				err := syscall.Statfs(path, &fsStat)
+				if err != nil {
+					glog.Errorf("Unable to get filesystem info for %s - %v", path, err)
+					continue
+				}
+				devicePath := make([]rune, 0, 1024)
+				for _, c := range fsStat.Mntfromname {
+					devicePath = append(devicePath, rune(c))
+				}
+				mountPath := make([]rune, 0, 1024)
+				for _, c := range fsStat.Mntonname {
+					mountPath = append(mountPath, rune(c))
+				}
+				glog.Infof("%s device: %s, mountPath: %s, blocks: %d, bsize: %d, bfree: %d, bavail: %d, files: %d, "+
+					"ffree: %d, io size: %d",
+					path,
+					string(devicePath),
+					string(mountPath),
+					fsStat.Blocks,
+					fsStat.Bsize,
+					fsStat.Bfree,
+					fsStat.Bavail,
+					fsStat.Files,
+					fsStat.Ffree,
+					fsStat.Iosize,
+				)
+
+				volumeStat := &nameservice.PhysicalVolumeStatus{
+					Path: path,
+					FileSystemStatus: &nameservice.FileSystemStatus{
+						MountPath:       string(mountPath),
+						DevicePath:      string(devicePath),
+						IoSize:          fsStat.Iosize,
+						Files:           fsStat.Files,
+						FilesFree:       fsStat.Ffree,
+						Blocks:          fsStat.Blocks,
+						BlockSize:       fsStat.Bsize,
+						BlocksAvailable: fsStat.Bavail,
+						BlocksFree:      fsStat.Bfree,
+					},
+				}
+				volumeStats = append(volumeStats, volumeStat)
+			}
+
 			_, err := nameService.HostReport(context.Background(), &nameservice.HostReportRequest{
-				Id:       "1",
-				Hostname: hostname,
-				PvIds:    pvIds,
-				Port:     uint32(port),
+				Id:          "1",
+				Hostname:    hostname,
+				PvIds:       pvIds,
+				Port:        uint32(port),
+				VolumeStats: volumeStats,
 			})
 
 			if err != nil {
