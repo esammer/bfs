@@ -201,10 +201,20 @@ func runClient(config *Config) {
 		}
 
 		for i, entry := range resp.Hosts {
-			fmt.Printf("  %04d: %s (%s) last seen: %s\n", i+1, entry.Hostname, entry.Id, time.Unix(entry.LastSeen, 0).String())
+			fmt.Printf("Host %d: %s:%d\n%15s: %s\n%15s: %s (%s ago)\n%15s: %s (%s ago)\n\n%15s:\n",
+				i+1,
+				entry.Hostname,
+				entry.Port,
+				"id", entry.Id,
+				"first seen", time.Unix(entry.FirstSeen, 0).String(),
+				time.Now().Sub(time.Unix(entry.FirstSeen, 0)).Truncate(time.Millisecond).String(),
+				"last seen", time.Unix(entry.LastSeen, 0).String(),
+				time.Now().Sub(time.Unix(entry.LastSeen, 0)).Truncate(time.Millisecond).String(),
+				"volumes",
+			)
 
 			for i, pvId := range entry.PvIds {
-				fmt.Printf("    %02d: %s\n", i+1, pvId)
+				fmt.Printf("%18d: %s\n", i+1, pvId)
 			}
 		}
 	default:

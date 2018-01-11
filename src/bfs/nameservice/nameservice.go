@@ -210,7 +210,7 @@ func (this *NameService) HostReport(ctx context.Context, request *HostReportRequ
 		distance = host.lastSeen.Sub(entry.lastSeen)
 	}
 
-	glog.Infof("Host report - %s (%s) last seen: %s distance from previous: %s",
+	glog.V(2).Infof("Host report - %s (%s) last seen: %s distance from previous: %s",
 		request.Hostname,
 		request.Id,
 		host.lastSeen,
