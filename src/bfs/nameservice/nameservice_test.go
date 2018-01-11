@@ -50,6 +50,34 @@ func TestNameService(t *testing.T) {
 
 	serviceClient := NewNameServiceClient(conn)
 
+	t.Run("HostReportAndHosts", func(t *testing.T) {
+		defer glog.Flush()
+
+		_, err := serviceClient.HostReport(context.Background(), &HostReportRequest{
+			Id:       "1",
+			Hostname: "hostname",
+			Port:     uint32(1),
+			PvIds:    []string{"a", "b", "c"},
+		})
+		require.NoError(t, err)
+
+		hostResp, err := serviceClient.Hosts(context.Background(), &HostsRequest{})
+		require.NoError(t, err)
+		require.Len(t, hostResp.Hosts, 1)
+		require.True(t, hostResp.Hosts[0].FirstSeen > 0)
+		require.Equal(t, hostResp.Hosts[0].FirstSeen, hostResp.Hosts[0].LastSeen)
+
+		// We can't control the timestamps injected so we zero them out for comparison.
+		hostResp.Hosts[0].FirstSeen = 0
+		hostResp.Hosts[0].LastSeen = 0
+
+		require.Contains(t, hostResp.Hosts, &KnownHost{
+			Id:       "1",
+			Hostname: "hostname",
+			Port:     uint32(1),
+			PvIds:    []string{"a", "b", "c"},
+		})
+	})
 	t.Run("AddVolume", func(t *testing.T) {
 		defer glog.Flush()
 

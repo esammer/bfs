@@ -23,6 +23,7 @@ type NameService struct {
 type Host struct {
 	id        string
 	hostname  string
+	port      uint32
 	pvIds     []string
 	firstSeen time.Time
 	lastSeen  time.Time
@@ -196,6 +197,7 @@ func (this *NameService) HostReport(ctx context.Context, request *HostReportRequ
 	host := &Host{
 		id:        request.Id,
 		hostname:  request.Hostname,
+		port:      request.Port,
 		pvIds:     request.PvIds,
 		firstSeen: time.Now(),
 		lastSeen:  time.Now(),
@@ -228,6 +230,7 @@ func (this *NameService) Hosts(ctx context.Context, request *HostsRequest) (*Hos
 			Id:        entry.id,
 			PvIds:     entry.pvIds,
 			Hostname:  entry.hostname,
+			Port:      entry.port,
 			FirstSeen: entry.firstSeen.Unix(),
 			LastSeen:  entry.lastSeen.Unix(),
 		})
