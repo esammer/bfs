@@ -202,7 +202,7 @@ func runClient(config *Config) {
 		}
 
 		for i, entry := range resp.Hosts {
-			fmt.Printf("Host %d: %s:%d\n%15s: %s\n%15s: %s (%s ago)\n%15s: %s (%s ago)\n\n%15s:\n",
+			fmt.Printf("Host %d: %s:%d\n%15s: %s\n%15s: %s (%s ago)\n%15s: %s (%s ago)\n%15s:\n",
 				i+1,
 				entry.Hostname,
 				entry.Port,
@@ -233,6 +233,8 @@ func runClient(config *Config) {
 						float64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.Blocks)),
 				)
 			}
+
+			fmt.Println()
 		}
 	default:
 		glog.Errorf("Unknown command %s", config.ExtraArgs[0])
