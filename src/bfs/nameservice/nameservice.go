@@ -3,7 +3,9 @@ package nameservice
 import (
 	"bfs/ns"
 	"context"
+	"github.com/golang/glog"
 	"io"
+	"time"
 )
 
 const (
@@ -13,12 +15,23 @@ const (
 type NameService struct {
 	Namespace *ns.Namespace
 
+	hostRegistry map[string]*Host
+
 	NameServiceServer
+}
+
+type Host struct {
+	id        string
+	hostname  string
+	pvIds     []string
+	firstSeen time.Time
+	lastSeen  time.Time
 }
 
 func New(namespace *ns.Namespace) *NameService {
 	return &NameService{
-		Namespace: namespace,
+		Namespace:    namespace,
+		hostRegistry: make(map[string]*Host, 40),
 	}
 }
 
@@ -177,4 +190,48 @@ func (this *NameService) AddVolume(ctx context.Context, request *AddVolumeReques
 	}
 
 	return &AddVolumeResponse{}, nil
+}
+
+func (this *NameService) HostReport(ctx context.Context, request *HostReportRequest) (*HostReportResponse, error) {
+	host := &Host{
+		id:        request.Id,
+		hostname:  request.Hostname,
+		pvIds:     request.PvIds,
+		firstSeen: time.Now(),
+		lastSeen:  time.Now(),
+	}
+
+	var distance time.Duration
+
+	if entry, ok := this.hostRegistry[request.Id]; ok {
+		host.firstSeen = entry.firstSeen
+		distance = host.lastSeen.Sub(entry.lastSeen)
+	}
+
+	glog.Infof("Host report - %s (%s) last seen: %s distance from previous: %s",
+		request.Hostname,
+		request.Id,
+		host.lastSeen,
+		distance.String(),
+	)
+
+	this.hostRegistry[request.Id] = host
+
+	return &HostReportResponse{}, nil
+}
+
+func (this *NameService) Hosts(ctx context.Context, request *HostsRequest) (*HostsResponse, error) {
+	hosts := make([]*KnownHost, 0, 40)
+
+	for _, entry := range this.hostRegistry {
+		hosts = append(hosts, &KnownHost{
+			Id:        entry.id,
+			PvIds:     entry.pvIds,
+			Hostname:  entry.hostname,
+			FirstSeen: entry.firstSeen.Unix(),
+			LastSeen:  entry.lastSeen.Unix(),
+		})
+	}
+
+	return &HostsResponse{Hosts: hosts}, nil
 }

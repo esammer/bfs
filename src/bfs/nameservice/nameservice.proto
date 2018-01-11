@@ -61,6 +61,34 @@ message VolumeInfoResponse {
   repeated string pvIds = 1;
 }
 
+message HostReportRequest {
+  string id = 1;
+  string hostname = 2;
+  uint32 port = 3;
+  repeated string pvIds = 4;
+}
+
+message KnownHost {
+  string id = 1;
+  string hostname = 2;
+  uint32 port = 3;
+  int64 firstSeen = 4;
+  int64 lastSeen = 5;
+  repeated string pvIds = 6;
+}
+
+message HostReportResponse {
+
+}
+
+message HostsRequest {
+
+}
+
+message HostsResponse {
+  repeated KnownHost hosts = 1;
+}
+
 message BlockMetadata {
   string blockId = 1;
   string pvId = 2;
@@ -83,6 +111,9 @@ service NameService {
   rpc Rename (RenameRequest) returns (RenameResponse);
   rpc List (ListRequest) returns (stream ListResponse);
 
-  rpc AddVolume(AddVolumeRequest) returns (AddVolumeResponse);
+  rpc AddVolume (AddVolumeRequest) returns (AddVolumeResponse);
   rpc VolumeInfo (VolumeInfoRequest) returns (VolumeInfoResponse);
+
+  rpc HostReport (HostReportRequest) returns (HostReportResponse);
+  rpc Hosts (HostsRequest) returns (HostsResponse);
 }
