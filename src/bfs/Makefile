@@ -4,6 +4,7 @@ DEP = dep
 PACKAGES = . \
 	$(PROJECT)/block \
 	$(PROJECT)/blockservice \
+	$(PROJECT)/config \
 	$(PROJECT)/file \
 	$(PROJECT)/fsservice \
 	$(PROJECT)/host \
@@ -18,6 +19,7 @@ PACKAGES = . \
 PROJECT_DIRS = . \
 	block \
 	blockservice \
+	config \
 	file \
 	fsservice \
 	host \
@@ -29,7 +31,7 @@ PROJECT_DIRS = . \
 	test \
 	util/size \
 	volumeutil
-PROTO_FILES = blockservice/blockservice.pb.go nameservice/nameservice.pb.go fsservice/fsservice.pb.go
+PROTO_FILES = blockservice/blockservice.pb.go config/config.pb.go nameservice/nameservice.pb.go fsservice/fsservice.pb.go
 
 .PHONY: all benchmark check clean compile deps format generate generate-proto help realclean
 
@@ -59,7 +61,7 @@ deps:
 	$(DEP) ensure
 
 compile: deps generate-proto
-	$(GO) install
+	$(GO) install -v
 
 check: compile
 	$(GO) test $(TEST_ARGS) $(PACKAGES) $(TEST_EXTRA_ARGS)

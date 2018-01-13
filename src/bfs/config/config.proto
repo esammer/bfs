@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package config;
+
+option go_package = "bfs/config";
+
+message BlockServiceConfig {
+  string bindAddress = 1;
+  repeated PhysicalVolumeConfig volumeConfigs = 2;
+}
+
+message NameServiceConfig {
+  string bindAddress = 1;
+  string advertiseAddress = 2;
+}
+
+message PhysicalVolumeConfig {
+  string id = 1;
+  string path = 2;
+  repeated Label labels = 3;
+}
+
+message LogicalVolumeConfig {
+  string id = 1;
+  repeated string pvIds = 2;
+  repeated Label labels = 3;
+}
+
+message Label {
+  string key = 1;
+  string value = 2;
+}
