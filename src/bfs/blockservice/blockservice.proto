@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package blockservice;
 
+option go_package = "bfs/blockservice";
+
 enum Status {
   UNKNOWN = 0;
   SUCCESS = 1;

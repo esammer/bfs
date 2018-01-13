@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package nameservice;
 
+option go_package = "bfs/nameservice";
+
 message GetRequest {
   string path = 1;
 }
