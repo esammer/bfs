@@ -35,7 +35,12 @@ PROJECT_DIRS = . \
 	test \
 	util/size \
 	volumeutil
-PROTO_FILES = blockservice/blockservice.pb.go config/config.pb.go nameservice/nameservice.pb.go fsservice/fsservice.pb.go registryservice/registryservice.pb.go
+PROTO_FILES = \
+	blockservice/blockservice.pb.go \
+	config/config.pb.go \
+	fsservice/fsservice.pb.go \
+	nameservice/nameservice.pb.go \
+	registryservice/registryservice.pb.go
 
 .PHONY: all benchmark check clean compile deps format generate generate-proto help realclean
 
