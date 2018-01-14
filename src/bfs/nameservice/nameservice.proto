@@ -63,54 +63,6 @@ message VolumeInfoResponse {
   repeated string pvIds = 1;
 }
 
-message HostReportRequest {
-  string id = 1;
-  string hostname = 2;
-  uint32 port = 3;
-  repeated string pvIds = 4;
-  repeated PhysicalVolumeStatus volumeStats = 5;
-}
-
-message KnownHost {
-  string id = 1;
-  string hostname = 2;
-  uint32 port = 3;
-  int64 firstSeen = 4;
-  int64 lastSeen = 5;
-  repeated string pvIds = 6;
-  repeated PhysicalVolumeStatus volumeStats = 7;
-}
-
-message PhysicalVolumeStatus {
-  string id = 1;
-  string path = 2;
-  FileSystemStatus fileSystemStatus = 3;
-}
-
-message FileSystemStatus {
-  string devicePath = 1;
-  string mountPath = 2;
-  uint32 blockSize = 3;
-  uint64 blocks = 4;
-  uint64 blocksFree = 5;
-  uint64 blocksAvailable = 6;
-  uint64 files = 7;
-  uint64 filesFree = 8;
-  int32 ioSize = 9;
-}
-
-message HostReportResponse {
-
-}
-
-message HostsRequest {
-
-}
-
-message HostsResponse {
-  repeated KnownHost hosts = 1;
-}
-
 message BlockMetadata {
   string blockId = 1;
   string pvId = 2;
@@ -135,7 +87,4 @@ service NameService {
 
   rpc AddVolume (AddVolumeRequest) returns (AddVolumeResponse);
   rpc VolumeInfo (VolumeInfoRequest) returns (VolumeInfoResponse);
-
-  rpc HostReport (HostReportRequest) returns (HostReportResponse);
-  rpc Hosts (HostsRequest) returns (HostsResponse);
 }

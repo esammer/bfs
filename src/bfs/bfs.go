@@ -5,6 +5,7 @@ import (
 	"bfs/file"
 	"bfs/nameservice"
 	"bfs/ns"
+	"bfs/registryservice"
 	"bfs/util/size"
 	"context"
 	"flag"
@@ -89,6 +90,7 @@ func runClient(config *Config) {
 
 	nameClient := nameservice.NewNameServiceClient(conn)
 	blockClient := blockservice.NewBlockServiceClient(conn)
+	registryClient := registryservice.NewRegistryServiceClient(conn)
 
 	switch config.ExtraArgs[0] {
 	case "rm":
@@ -195,7 +197,7 @@ func runClient(config *Config) {
 			}
 		}
 	case "hosts":
-		resp, err := nameClient.Hosts(context.Background(), &nameservice.HostsRequest{})
+		resp, err := registryClient.Hosts(context.Background(), &registryservice.HostsRequest{})
 		if err != nil {
 			glog.Errorf("%s failed - %v", config.ExtraArgs[0], err)
 			return
@@ -207,14 +209,14 @@ func runClient(config *Config) {
 				entry.Hostname,
 				entry.Port,
 				"id", entry.Id,
-				"first seen", time.Unix(entry.FirstSeen, 0).String(),
-				time.Now().Sub(time.Unix(entry.FirstSeen, 0)).Truncate(time.Millisecond).String(),
-				"last seen", time.Unix(entry.LastSeen, 0).String(),
-				time.Now().Sub(time.Unix(entry.LastSeen, 0)).Truncate(time.Millisecond).String(),
+				"first seen", time.Unix(0, entry.FirstSeen).String(),
+				time.Now().Sub(time.Unix(0, entry.FirstSeen)).Truncate(time.Millisecond).String(),
+				"last seen", time.Unix(0, entry.LastSeen).String(),
+				time.Now().Sub(time.Unix(0, entry.LastSeen)).Truncate(time.Millisecond).String(),
 				"volumes",
 			)
 
-			for j, pvId := range entry.PvIds {
+			for j, volumeStats := range entry.VolumeStats {
 				bytesTotal := size.Bytes(float64(
 					resp.Hosts[i].VolumeStats[j].FileSystemStatus.Blocks *
 						uint64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.BlockSize),
@@ -227,7 +229,7 @@ func runClient(config *Config) {
 				fmt.Printf(
 					"%18d: %s - path: %s fs: %.2fGB of %.02fGB (%.2f%%) free %.03fm of %.03fm files (%.2f%%) free %s at %s\n",
 					j+1,
-					pvId,
+					volumeStats.Id,
 					resp.Hosts[i].VolumeStats[j].Path,
 					bytesFree.ToGigabytes(),
 					bytesTotal.ToGigabytes(),
@@ -284,6 +286,7 @@ func runServer(config *Config) {
 
 	nameService := nameservice.New(namespace)
 	blockService := blockservice.New(pvs)
+	registryService := registryservice.New()
 
 	listener, err := net.Listen("tcp", config.BindAddress)
 	if err != nil {
@@ -294,6 +297,7 @@ func runServer(config *Config) {
 	server := grpc.NewServer()
 	blockservice.RegisterBlockServiceServer(server, blockService)
 	nameservice.RegisterNameServiceServer(server, nameService)
+	registryservice.RegisterRegistryServiceServer(server, registryService)
 
 	signalChan := make(chan os.Signal, 8)
 	go func() {
@@ -331,7 +335,7 @@ func runServer(config *Config) {
 		}
 
 		for t := range ticker.C {
-			volumeStats := make([]*nameservice.PhysicalVolumeStatus, 0, len(config.VolumePaths))
+			volumeStats := make([]*registryservice.PhysicalVolumeStatus, 0, len(config.VolumePaths))
 
 			for _, path := range config.VolumePaths {
 				fsStat := syscall.Statfs_t{}
@@ -350,9 +354,9 @@ func runServer(config *Config) {
 					mountPath = append(mountPath, rune(c))
 				}
 
-				volumeStat := &nameservice.PhysicalVolumeStatus{
+				volumeStat := &registryservice.PhysicalVolumeStatus{
 					Path: path,
-					FileSystemStatus: &nameservice.FileSystemStatus{
+					FileSystemStatus: &registryservice.FileSystemStatus{
 						MountPath:       string(mountPath),
 						DevicePath:      string(devicePath),
 						IoSize:          fsStat.Iosize,
@@ -367,10 +371,9 @@ func runServer(config *Config) {
 				volumeStats = append(volumeStats, volumeStat)
 			}
 
-			_, err := nameService.HostReport(context.Background(), &nameservice.HostReportRequest{
+			_, err := registryService.HostStatus(context.Background(), &registryservice.HostStatusRequest{
 				Id:          "1",
 				Hostname:    hostname,
-				PvIds:       pvIds,
 				Port:        uint32(port),
 				VolumeStats: volumeStats,
 			})

@@ -11,6 +11,7 @@ PACKAGES = . \
 	$(PROJECT)/lru \
 	$(PROJECT)/nameservice \
 	$(PROJECT)/ns \
+	$(PROJECT)/registryservice \
 	$(PROJECT)/server/blockserver \
 	$(PROJECT)/server/nameserver \
 	$(PROJECT)/test \
@@ -26,12 +27,13 @@ PROJECT_DIRS = . \
 	lru \
 	nameservice \
 	ns \
+	registryservice \
 	server/blockserver \
 	server/nameserver \
 	test \
 	util/size \
 	volumeutil
-PROTO_FILES = blockservice/blockservice.pb.go config/config.pb.go nameservice/nameservice.pb.go fsservice/fsservice.pb.go
+PROTO_FILES = blockservice/blockservice.pb.go config/config.pb.go nameservice/nameservice.pb.go fsservice/fsservice.pb.go registryservice/registryservice.pb.go
 
 .PHONY: all benchmark check clean compile deps format generate generate-proto help realclean
 
