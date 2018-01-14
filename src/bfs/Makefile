@@ -8,6 +8,7 @@ PACKAGES = . \
 	$(PROJECT)/file \
 	$(PROJECT)/fsservice \
 	$(PROJECT)/host \
+	$(PROJECT)/label \
 	$(PROJECT)/lru \
 	$(PROJECT)/nameservice \
 	$(PROJECT)/ns \
@@ -24,6 +25,7 @@ PROJECT_DIRS = . \
 	file \
 	fsservice \
 	host \
+	label \
 	lru \
 	nameservice \
 	ns \
