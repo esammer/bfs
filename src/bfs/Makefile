@@ -8,11 +8,11 @@ PACKAGES = . \
 	$(PROJECT)/file \
 	$(PROJECT)/fsservice \
 	$(PROJECT)/host \
-	$(PROJECT)/label \
 	$(PROJECT)/lru \
 	$(PROJECT)/nameservice \
 	$(PROJECT)/ns \
 	$(PROJECT)/registryservice \
+	$(PROJECT)/selector \
 	$(PROJECT)/server/blockserver \
 	$(PROJECT)/server/nameserver \
 	$(PROJECT)/test \
@@ -25,11 +25,11 @@ PROJECT_DIRS = . \
 	file \
 	fsservice \
 	host \
-	label \
 	lru \
 	nameservice \
 	ns \
 	registryservice \
+	selector \
 	server/blockserver \
 	server/nameserver \
 	test \

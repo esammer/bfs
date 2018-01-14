@@ -1,4 +1,4 @@
-package label
+package selector
 
 import (
 	"bfs/config"
