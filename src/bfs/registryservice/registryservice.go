@@ -1,36 +1,81 @@
 package registryservice
 
 import (
+	"bfs/config"
+	"bfs/selector"
 	"context"
+	"fmt"
 	"github.com/golang/glog"
 	"time"
 )
 
 type RegistryService struct {
-	hostRegistry map[string]*HostStatus
+	registeredHosts map[string]*config.HostConfig
+	hostStatus      map[string]*HostStatus
+
+	hostLabels map[string][]*config.Label
 }
 
 func New() *RegistryService {
 	return &RegistryService{
-		hostRegistry: make(map[string]*HostStatus, 64),
+		hostStatus:      make(map[string]*HostStatus, 64),
+		registeredHosts: make(map[string]*config.HostConfig, 64),
+		hostLabels:      make(map[string][]*config.Label, 64),
 	}
+}
+
+func (this *RegistryService) RegisterHost(ctx context.Context, request *RegisterHostRequest) (*RegisterHostResponse, error) {
+	hostConfig := request.HostConfig
+
+	glog.V(1).Infof("Register host id: %s hostname: %s", hostConfig.Id, hostConfig.Hostname)
+
+	if val, ok := this.registeredHosts[hostConfig.Id]; ok {
+		return nil, fmt.Errorf("host %s already registered from hostname %s", val.Id, val.Hostname)
+	}
+
+	this.registeredHosts[hostConfig.Id] = hostConfig
+	this.hostLabels[hostConfig.Id] = hostConfig.Labels
+
+	return &RegisterHostResponse{}, nil
 }
 
 func (this *RegistryService) Hosts(ctx context.Context, request *HostsRequest) (*HostsResponse, error) {
-	hosts := make([]*HostStatus, 0, 40)
+	glog.V(2).Infof("Received host status query - selector: %s", request.Selector)
 
-	for _, entry := range this.hostRegistry {
-		hosts = append(hosts, entry)
+	hosts := make([]*HostStatus, 0, 40)
+	hostConfigs := make([]*config.HostConfig, 0, 40)
+
+	var sel *selector.Selector
+	if request.Selector != "" {
+		var err error
+
+		sel, err = selector.ParseSelector(request.Selector)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return &HostsResponse{Hosts: hosts}, nil
+	for key, entry := range this.registeredHosts {
+		if sel != nil && !sel.Evaluate(entry.Labels) {
+			continue
+		}
+
+		glog.V(2).Infof("Returning host: %s", entry.Hostname)
+
+		hosts = append(hosts, this.hostStatus[key])
+		hostConfigs = append(hostConfigs, entry)
+	}
+
+	return &HostsResponse{Hosts: hosts, HostConfigs: hostConfigs}, nil
 }
 
 func (this *RegistryService) HostStatus(ctx context.Context, request *HostStatusRequest) (*HostStatusResponse, error) {
+	if _, ok := this.registeredHosts[request.Id]; !ok {
+		glog.Warningf("Received status report from unknown host %s", request.Id)
+	}
+
 	hostStatus := &HostStatus{
 		Id:          request.Id,
-		Hostname:    request.Hostname,
-		Port:        request.Port,
 		FirstSeen:   time.Now().UnixNano(),
 		LastSeen:    time.Now().UnixNano(),
 		VolumeStats: request.VolumeStats,
@@ -38,19 +83,18 @@ func (this *RegistryService) HostStatus(ctx context.Context, request *HostStatus
 
 	var distance time.Duration
 
-	if entry, ok := this.hostRegistry[request.Id]; ok {
+	if entry, ok := this.hostStatus[request.Id]; ok {
 		distance = time.Since(time.Unix(0, entry.LastSeen))
 		hostStatus.FirstSeen = entry.FirstSeen
 	}
 
-	glog.V(2).Infof("Host report - %s (%s) last seen: %s distance from previous: %s",
-		request.Hostname,
+	glog.V(2).Infof("Host report - %s last seen: %s distance from previous: %s",
 		request.Id,
 		time.Unix(0, hostStatus.LastSeen).String(),
 		distance.String(),
 	)
 
-	this.hostRegistry[request.Id] = hostStatus
+	this.hostStatus[request.Id] = hostStatus
 
 	return &HostStatusResponse{}, nil
 }

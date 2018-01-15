@@ -12,18 +12,34 @@ message BlockServiceConfig {
 message NameServiceConfig {
   string bindAddress = 1;
   string advertiseAddress = 2;
+  string path = 3;
+}
+
+message RegistryServiceConfig {
+  string bindAddress = 1;
+  string advertiseAddress = 2;
 }
 
 message PhysicalVolumeConfig {
   string id = 1;
   string path = 2;
-  repeated Label labels = 3;
+  bool allowAutoInitialize = 3;
+  repeated Label labels = 4;
 }
 
 message LogicalVolumeConfig {
   string id = 1;
   repeated string pvIds = 2;
   repeated Label labels = 3;
+}
+
+message HostConfig {
+  string id = 1;
+  string hostname = 2;
+  BlockServiceConfig blockServiceConfig = 3;
+  NameServiceConfig nameServiceConfig = 4;
+  RegistryServiceConfig registryServiceConfig = 5;
+  repeated Label labels = 6;
 }
 
 message Label {

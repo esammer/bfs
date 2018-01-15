@@ -1,6 +1,7 @@
 package registryservice
 
 import (
+	"bfs/config"
 	"bfs/ns"
 	"bfs/test"
 	"context"
@@ -56,15 +57,23 @@ func TestRegistryService(t *testing.T) {
 	t.Run("HostReportAndHosts", func(t *testing.T) {
 		defer glog.Flush()
 
+		serviceClient.RegisterHost(context.Background(), &RegisterHostRequest{
+			HostConfig: &config.HostConfig{
+				Id:       "1",
+				Hostname: "hostname",
+				Labels: []*config.Label{
+					{Key: "env", Value: "production"},
+					{Key: "os", Value: "linux"},
+				},
+			},
+		})
 		_, err := serviceClient.HostStatus(context.Background(), &HostStatusRequest{
 			Id:          "1",
-			Hostname:    "hostname",
-			Port:        uint32(1),
 			VolumeStats: volumeStats,
 		})
 		require.NoError(t, err)
 
-		hostResp, err := serviceClient.Hosts(context.Background(), &HostsRequest{})
+		hostResp, err := serviceClient.Hosts(context.Background(), &HostsRequest{Selector: "env = production"})
 		require.NoError(t, err)
 		require.Len(t, hostResp.Hosts, 1)
 		require.True(t, hostResp.Hosts[0].FirstSeen > 0)
@@ -76,8 +85,6 @@ func TestRegistryService(t *testing.T) {
 
 		require.Contains(t, hostResp.Hosts, &HostStatus{
 			Id:          "1",
-			Hostname:    "hostname",
-			Port:        uint32(1),
 			VolumeStats: volumeStats,
 		})
 	})

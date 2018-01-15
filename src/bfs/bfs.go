@@ -2,12 +2,14 @@ package main
 
 import (
 	"bfs/blockservice"
+	"bfs/config"
 	"bfs/file"
 	"bfs/nameservice"
 	"bfs/ns"
 	"bfs/registryservice"
 	"bfs/util/size"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/golang/glog"
@@ -16,7 +18,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -44,24 +45,267 @@ func (this *ListValue) String() string {
 	return strings.Join(*this, ",")
 }
 
-func main() {
-	config := &Config{}
+type BFSServer struct {
+	*config.HostConfig
+	*config.BlockServiceConfig
+	*config.NameServiceConfig
+	*config.RegistryServiceConfig
 
-	clientFlags := flag.NewFlagSet("client", flag.ContinueOnError)
-	clientFlags.StringVar(&config.BindAddress, "server", "", "server host:port")
-	clientFlags.IntVar(&config.BlockSize, "block-size", 0, "block size for write (in MB)")
-	flag.CommandLine.VisitAll(func(f *flag.Flag) {
-		clientFlags.Var(f.Value, f.Name, f.Usage)
-	})
+	PhysicalVolumes []*blockservice.PhysicalVolume
+}
+
+func (this *BFSServer) Run() error {
+	this.configure()
+	this.start()
+
+	return nil
+}
+
+func (this *BFSServer) configure() error {
+	hostConfig := &config.HostConfig{}
+	nsConfig := &config.NameServiceConfig{}
+	rsConfig := &config.RegistryServiceConfig{}
+	bsConfig := &config.BlockServiceConfig{}
+
+	var volumePaths ListValue
+	var allowAutoInit bool
+	var bindAddress string
+	var hostLabels ListValue
 
 	serverFlags := flag.NewFlagSet("server", flag.ContinueOnError)
-	serverFlags.StringVar(&config.NamespacePath, "ns", "", "namespace directory")
-	serverFlags.StringVar(&config.BindAddress, "bind", "127.0.0.1:60000", "bind address")
-	serverFlags.BoolVar(&config.AllowInitialization, "auto-init", false, "allow auto-initialization of physical volumes")
-	serverFlags.BoolVar(&config.AllowInitialization, "a", false, "allow auto-initialization of physical volumes")
-	serverFlags.Var(&config.VolumePaths, "volume", "physical volume directory (repeatable)")
+	serverFlags.Var(&volumePaths, "volume", "physical volume directory (repeatable)")
+	serverFlags.BoolVar(&allowAutoInit, "auto-init", false, "allow auto-initialization of physical volumes")
+	serverFlags.BoolVar(&allowAutoInit, "a", false, "allow auto-initialization of physical volumes")
+	serverFlags.StringVar(&bindAddress, "bind", "127.0.0.1:60000", "bind address")
+	serverFlags.StringVar(&nsConfig.Path, "ns", "", "namespace directory")
+	serverFlags.Var(&hostLabels, "label", "host labels")
+
 	flag.CommandLine.VisitAll(func(f *flag.Flag) {
 		serverFlags.Var(f.Value, f.Name, f.Usage)
+	})
+
+	if err := serverFlags.Parse(os.Args[2:]); err != nil {
+		return err
+	}
+
+	flag.Parse()
+
+	pvConfigs := make([]*config.PhysicalVolumeConfig, 0, len(volumePaths))
+
+	for _, pathSpec := range volumePaths {
+		components := strings.Split(pathSpec, ":")
+		var labels []*config.Label
+
+		if len(components) > 1 {
+			labelStrs := strings.Split(components[1], ",")
+			labels = make([]*config.Label, 0, len(labelStrs))
+
+			for _, labelStr := range labelStrs {
+				labelComponents := strings.Split(labelStr, "=")
+				labels = append(labels, &config.Label{
+					Key:   labelComponents[0],
+					Value: labelComponents[1],
+				})
+			}
+		}
+
+		glog.V(1).Infof("Configure volume path %s auto-initialize: %t labels: %v", components[0], allowAutoInit, labels)
+
+		pvConfigs = append(pvConfigs, &config.PhysicalVolumeConfig{
+			Path:                components[0],
+			AllowAutoInitialize: allowAutoInit,
+			Labels:              labels,
+		})
+	}
+
+	bsConfig.BindAddress = bindAddress
+	bsConfig.VolumeConfigs = pvConfigs
+
+	nsConfig.BindAddress = bindAddress
+	nsConfig.AdvertiseAddress = bindAddress
+
+	rsConfig.BindAddress = bindAddress
+	rsConfig.AdvertiseAddress = bindAddress
+
+	this.BlockServiceConfig = bsConfig
+	this.NameServiceConfig = nsConfig
+	this.RegistryServiceConfig = rsConfig
+
+	if len(this.NameServiceConfig.Path) == 0 {
+		return errors.New("--ns is required")
+	}
+
+	if len(this.BlockServiceConfig.VolumeConfigs) == 0 {
+		return errors.New("at least one --volume is required")
+	}
+
+	parsedLabels := make([]*config.Label, len(hostLabels))
+	for i, label := range hostLabels {
+		components := strings.Split(label, "=")
+
+		parsedLabels[i] = &config.Label{
+			Key:   components[0],
+			Value: components[1],
+		}
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		return err
+	}
+
+	hostConfig.NameServiceConfig = nsConfig
+	hostConfig.BlockServiceConfig = bsConfig
+	hostConfig.RegistryServiceConfig = rsConfig
+	hostConfig.Labels = parsedLabels
+	hostConfig.Id = hostname
+	hostConfig.Hostname = hostname
+
+	this.HostConfig = hostConfig
+
+	return nil
+}
+
+func (this *BFSServer) start() error {
+	// Assemble the block service
+	bsConfig := this.BlockServiceConfig
+	pvs := make([]*blockservice.PhysicalVolume, len(bsConfig.VolumeConfigs))
+
+	for i, pvConfig := range bsConfig.VolumeConfigs {
+		pvs[i] = blockservice.NewPhysicalVolume(pvConfig.Path)
+		pvs[i].Open(pvConfig.AllowAutoInitialize)
+	}
+
+	// Assemble the name service
+	nsConfig := this.NameServiceConfig
+	namespace := ns.New(nsConfig.Path)
+	if err := namespace.Open(); err != nil {
+		return err
+	}
+
+	// Create the services
+	nameService := nameservice.New(namespace)
+	blockService := blockservice.New(pvs)
+	registryService := registryservice.New()
+
+	// Register services with the RPC server
+	server := grpc.NewServer()
+	blockservice.RegisterBlockServiceServer(server, blockService)
+	nameservice.RegisterNameServiceServer(server, nameService)
+	registryservice.RegisterRegistryServiceServer(server, registryService)
+
+	listener, err := net.Listen("tcp", nsConfig.BindAddress)
+	if err != nil {
+		fmt.Errorf("failed to bind to %s - %v", nsConfig.BindAddress, err)
+	}
+
+	// Start signal handler routine
+	signalChan := make(chan os.Signal, 8)
+	go func() {
+		for sig := range signalChan {
+			switch sig {
+			case os.Interrupt, syscall.SIGTERM:
+				glog.Info("Shutting down")
+				server.GracefulStop()
+			default:
+			}
+		}
+	}()
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
+
+	ticker := time.NewTicker(10 * time.Second)
+	quitChan := make(chan error)
+
+	go func() {
+		err := server.Serve(listener)
+		ticker.Stop()
+		quitChan <- err
+	}()
+
+	_, err = registryService.RegisterHost(context.Background(), &registryservice.RegisterHostRequest{
+		HostConfig: this.HostConfig,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Start health and status routine
+	go func() {
+		for t := range ticker.C {
+			volumeStats := make([]*registryservice.PhysicalVolumeStatus, 0, len(bsConfig.VolumeConfigs))
+
+			for _, pvConfig := range bsConfig.VolumeConfigs {
+				fsStat := syscall.Statfs_t{}
+				err := syscall.Statfs(pvConfig.Path, &fsStat)
+				if err != nil {
+					glog.Errorf("Unable to get filesystem info for %s - %v", pvConfig.Path, err)
+					continue
+				}
+
+				devicePath := make([]rune, 0, 1024)
+				for _, c := range fsStat.Mntfromname {
+					devicePath = append(devicePath, rune(c))
+				}
+				mountPath := make([]rune, 0, 1024)
+				for _, c := range fsStat.Mntonname {
+					mountPath = append(mountPath, rune(c))
+				}
+
+				volumeStat := &registryservice.PhysicalVolumeStatus{
+					Path: pvConfig.Path,
+					FileSystemStatus: &registryservice.FileSystemStatus{
+						MountPath:       string(mountPath),
+						DevicePath:      string(devicePath),
+						IoSize:          fsStat.Iosize,
+						Files:           fsStat.Files,
+						FilesFree:       fsStat.Ffree,
+						Blocks:          fsStat.Blocks,
+						BlockSize:       fsStat.Bsize,
+						BlocksAvailable: fsStat.Bavail,
+						BlocksFree:      fsStat.Bfree,
+					},
+				}
+				volumeStats = append(volumeStats, volumeStat)
+			}
+
+			_, err := registryService.HostStatus(context.Background(), &registryservice.HostStatusRequest{
+				Id:          this.Id,
+				VolumeStats: volumeStats,
+			})
+
+			if err != nil {
+				glog.Errorf("Unable to report host status %s - %v", t.String(), err)
+			}
+		}
+	}()
+	glog.Infof("Server running on %s - use SIGINT to stop", nsConfig.BindAddress)
+
+	err = <-quitChan
+	if err != nil {
+		glog.Errorf("RPC server failed - %v", err)
+	}
+
+	if err := namespace.Close(); err != nil {
+		return err
+	}
+
+	for _, pv := range pvs {
+		if err := pv.Close(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func main() {
+	c := &Config{}
+
+	clientFlags := flag.NewFlagSet("client", flag.ContinueOnError)
+	clientFlags.StringVar(&c.BindAddress, "server", "", "server host:port")
+	clientFlags.IntVar(&c.BlockSize, "block-size", 0, "block size for write (in MB)")
+	flag.CommandLine.VisitAll(func(f *flag.Flag) {
+		clientFlags.Var(f.Value, f.Name, f.Usage)
 	})
 
 	flag.Parse()
@@ -71,18 +315,17 @@ func main() {
 		switch args[1] {
 		case "client":
 			clientFlags.Parse(args[2:])
-			config.ExtraArgs = clientFlags.Args()
-			runClient(config)
+			c.ExtraArgs = clientFlags.Args()
+			runClient(c)
 		case "server":
-			serverFlags.Parse(args[2:])
-			config.ExtraArgs = clientFlags.Args()
-			runServer(config)
+			server := &BFSServer{}
+			server.Run()
 		}
 	}
 }
 
 func runClient(config *Config) {
-	conn, err := grpc.Dial(config.BindAddress, grpc.WithInsecure())
+	conn, err := grpc.Dial(config.BindAddress, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		glog.Errorf("Failed to connect to server %s - %v", config.BindAddress, err)
 	}
@@ -204,10 +447,9 @@ func runClient(config *Config) {
 		}
 
 		for i, entry := range resp.Hosts {
-			fmt.Printf("Host %d: %s:%d\n%15s: %s\n%15s: %s (%s ago)\n%15s: %s (%s ago)\n%15s:\n",
+			fmt.Printf("Host %d: %s\n%15s: %s\n%15s: %s (%s ago)\n%15s: %s (%s ago)\n%15s:\n",
 				i+1,
-				entry.Hostname,
-				entry.Port,
+				resp.HostConfigs[i].Hostname,
 				"id", entry.Id,
 				"first seen", time.Unix(0, entry.FirstSeen).String(),
 				time.Now().Sub(time.Unix(0, entry.FirstSeen)).Truncate(time.Millisecond).String(),
@@ -248,151 +490,5 @@ func runClient(config *Config) {
 		}
 	default:
 		glog.Errorf("Unknown command %s", config.ExtraArgs[0])
-	}
-}
-
-func runServer(config *Config) {
-	if len(config.NamespacePath) == 0 {
-		glog.Error("--ns is required")
-		os.Exit(1)
-	}
-	if len(config.VolumePaths) == 0 {
-		glog.Error("At least one --volume is required")
-		os.Exit(1)
-	}
-
-	pvs := make([]*blockservice.PhysicalVolume, len(config.VolumePaths))
-	for i, path := range config.VolumePaths {
-		pvs[i] = blockservice.NewPhysicalVolume(path)
-		pvs[i].Open(config.AllowInitialization)
-	}
-
-	namespace := ns.New(config.NamespacePath)
-	namespace.Open()
-
-	pvIds := make([]string, len(pvs))
-	for i, pv := range pvs {
-		pvIds[i] = pv.ID.String()
-	}
-
-	if _, err := namespace.Volume("1"); err != nil {
-		glog.Infof("Initializing logical volume")
-
-		if err := namespace.AddVolume("1", pvIds); err != nil {
-			glog.Errorf("Unable to initialize logical volume - %v", err)
-			os.Exit(1)
-		}
-	}
-
-	nameService := nameservice.New(namespace)
-	blockService := blockservice.New(pvs)
-	registryService := registryservice.New()
-
-	listener, err := net.Listen("tcp", config.BindAddress)
-	if err != nil {
-		glog.Errorf("Failed to bind to %s - %v", config.BindAddress, err)
-		os.Exit(1)
-	}
-
-	server := grpc.NewServer()
-	blockservice.RegisterBlockServiceServer(server, blockService)
-	nameservice.RegisterNameServiceServer(server, nameService)
-	registryservice.RegisterRegistryServiceServer(server, registryService)
-
-	signalChan := make(chan os.Signal, 8)
-	go func() {
-		for sig := range signalChan {
-			switch sig {
-			case os.Interrupt, syscall.SIGTERM:
-				glog.Info("Shutting down")
-				server.GracefulStop()
-			default:
-			}
-		}
-	}()
-	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
-
-	ticker := time.NewTicker(10 * time.Second)
-	rpcQuitChan := make(chan error)
-
-	go func() {
-		err := server.Serve(listener)
-		ticker.Stop()
-		rpcQuitChan <- err
-	}()
-
-	go func() {
-		hostname, portStr, err := net.SplitHostPort(config.BindAddress)
-		if err != nil {
-			glog.Errorf("Unable to determine host and port from %s - %v", config.BindAddress, err)
-			return
-		}
-
-		port, err := strconv.ParseUint(portStr, 10, 32)
-		if err != nil {
-			glog.Errorf("Unable to parse port from %s - %v", portStr, err)
-			return
-		}
-
-		for t := range ticker.C {
-			volumeStats := make([]*registryservice.PhysicalVolumeStatus, 0, len(config.VolumePaths))
-
-			for _, path := range config.VolumePaths {
-				fsStat := syscall.Statfs_t{}
-				err := syscall.Statfs(path, &fsStat)
-				if err != nil {
-					glog.Errorf("Unable to get filesystem info for %s - %v", path, err)
-					continue
-				}
-
-				devicePath := make([]rune, 0, 1024)
-				for _, c := range fsStat.Mntfromname {
-					devicePath = append(devicePath, rune(c))
-				}
-				mountPath := make([]rune, 0, 1024)
-				for _, c := range fsStat.Mntonname {
-					mountPath = append(mountPath, rune(c))
-				}
-
-				volumeStat := &registryservice.PhysicalVolumeStatus{
-					Path: path,
-					FileSystemStatus: &registryservice.FileSystemStatus{
-						MountPath:       string(mountPath),
-						DevicePath:      string(devicePath),
-						IoSize:          fsStat.Iosize,
-						Files:           fsStat.Files,
-						FilesFree:       fsStat.Ffree,
-						Blocks:          fsStat.Blocks,
-						BlockSize:       fsStat.Bsize,
-						BlocksAvailable: fsStat.Bavail,
-						BlocksFree:      fsStat.Bfree,
-					},
-				}
-				volumeStats = append(volumeStats, volumeStat)
-			}
-
-			_, err := registryService.HostStatus(context.Background(), &registryservice.HostStatusRequest{
-				Id:          "1",
-				Hostname:    hostname,
-				Port:        uint32(port),
-				VolumeStats: volumeStats,
-			})
-
-			if err != nil {
-				glog.Errorf("Unable to report host status %s - %v", t.String(), err)
-			}
-		}
-	}()
-	glog.Infof("Server running on %s - use SIGINT to stop", config.BindAddress)
-
-	err = <-rpcQuitChan
-	if err != nil {
-		glog.Errorf("RPC server failed - %v", err)
-	}
-
-	namespace.Close()
-
-	for _, pv := range pvs {
-		pv.Close()
 	}
 }
