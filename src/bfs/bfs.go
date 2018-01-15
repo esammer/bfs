@@ -440,7 +440,12 @@ func runClient(config *Config) {
 			}
 		}
 	case "hosts":
-		resp, err := registryClient.Hosts(context.Background(), &registryservice.HostsRequest{})
+		var sel string
+		if len(config.ExtraArgs) == 2 {
+			sel = config.ExtraArgs[1]
+		}
+
+		resp, err := registryClient.Hosts(context.Background(), &registryservice.HostsRequest{Selector: sel})
 		if err != nil {
 			glog.Errorf("%s failed - %v", config.ExtraArgs[0], err)
 			return
@@ -486,6 +491,10 @@ func runClient(config *Config) {
 				)
 			}
 
+			fmt.Printf("%15s:\n", "labels")
+			for _, label := range resp.HostConfigs[i].Labels {
+				fmt.Printf("%18s: %s\n", label.Key, label.Value)
+			}
 			fmt.Println()
 		}
 	default:
