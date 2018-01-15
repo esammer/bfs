@@ -6,7 +6,6 @@ PACKAGES = . \
 	$(PROJECT)/blockservice \
 	$(PROJECT)/config \
 	$(PROJECT)/file \
-	$(PROJECT)/fsservice \
 	$(PROJECT)/host \
 	$(PROJECT)/lru \
 	$(PROJECT)/nameservice \
@@ -23,7 +22,6 @@ PROJECT_DIRS = . \
 	blockservice \
 	config \
 	file \
-	fsservice \
 	host \
 	lru \
 	nameservice \
@@ -38,7 +36,6 @@ PROJECT_DIRS = . \
 PROTO_FILES = \
 	blockservice/blockservice.pb.go \
 	config/config.pb.go \
-	fsservice/fsservice.pb.go \
 	nameservice/nameservice.pb.go \
 	registryservice/registryservice.pb.go
 
