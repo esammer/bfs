@@ -12,6 +12,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/coreos/etcd/clientv3"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 	"io"
@@ -183,10 +184,20 @@ func (this *BFSServer) start() error {
 		return err
 	}
 
+	etcdClient, err := clientv3.New(clientv3.Config{
+		Endpoints:        []string{"localhost:2379"},
+		DialOptions:      []grpc.DialOption{grpc.WithBlock(), grpc.WithInsecure()},
+		AutoSyncInterval: 5 * time.Minute,
+	})
+	if err != nil {
+		return err
+	}
+	defer etcdClient.Close()
+
 	// Create the services
 	nameService := nameservice.New(namespace)
 	blockService := blockservice.New(pvs)
-	registryService := registryservice.New()
+	registryService := registryservice.New(etcdClient)
 
 	// Register services with the RPC server
 	server := grpc.NewServer()

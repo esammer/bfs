@@ -5,7 +5,10 @@ import (
 	"bfs/selector"
 	"context"
 	"fmt"
+	"github.com/coreos/etcd/clientv3"
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
+	"sync"
 	"time"
 )
 
@@ -14,14 +17,47 @@ type RegistryService struct {
 	hostStatus      map[string]*HostStatus
 
 	hostLabels map[string][]*config.Label
+
+	etcdClient      *clientv3.Client
+	volumeConfigs   map[string]*config.LogicalVolumeConfig
+	volumeConfigMut *sync.Mutex
 }
 
-func New() *RegistryService {
-	return &RegistryService{
+func New(etcdClient *clientv3.Client) *RegistryService {
+	registryService := &RegistryService{
 		hostStatus:      make(map[string]*HostStatus, 64),
 		registeredHosts: make(map[string]*config.HostConfig, 64),
 		hostLabels:      make(map[string][]*config.Label, 64),
+		etcdClient:      etcdClient,
+		volumeConfigs:   make(map[string]*config.LogicalVolumeConfig),
+		volumeConfigMut: &sync.Mutex{},
 	}
+
+	go func() {
+		glog.V(1).Infof("Volumes watch process started")
+
+		volumesWatchChan := etcdClient.Watch(context.Background(), "/bfs/volumes", clientv3.WithPrefix())
+
+		for volumesWatchEvent := range volumesWatchChan {
+			for _, event := range volumesWatchEvent.Events {
+				glog.V(2).Infof("Received watch event %s = %s", event.Kv.Key, event.Kv.Value)
+				lvc := &config.LogicalVolumeConfig{}
+				if err := proto.UnmarshalText(string(event.Kv.Value), lvc); err != nil {
+					glog.V(2).Infof("Failed to parse protobuf: %v", err)
+					continue
+				}
+
+				registryService.volumeConfigMut.Lock()
+				glog.V(2).Infof("Adding logical volume config: %v id: %s", lvc, lvc.Id)
+				registryService.volumeConfigs[lvc.Id] = lvc
+				registryService.volumeConfigMut.Unlock()
+			}
+		}
+
+		glog.V(1).Infof("Volumes watch process complete")
+	}()
+
+	return registryService
 }
 
 func (this *RegistryService) RegisterHost(ctx context.Context, request *RegisterHostRequest) (*RegisterHostResponse, error) {
@@ -97,4 +133,17 @@ func (this *RegistryService) HostStatus(ctx context.Context, request *HostStatus
 	this.hostStatus[request.Id] = hostStatus
 
 	return &HostStatusResponse{}, nil
+}
+
+func (this *RegistryService) LogicalVolumeInfo(ctx context.Context, request *LogicalVolumeInfoRequest) (*LogicalVolumeInfoResponse, error) {
+	glog.V(2).Infof("Received logical volume info request for %s", request.Id)
+
+	this.volumeConfigMut.Lock()
+	defer this.volumeConfigMut.Unlock()
+
+	if val, ok := this.volumeConfigs[request.Id]; ok {
+		return &LogicalVolumeInfoResponse{Config: val}, nil
+	} else {
+		return nil, fmt.Errorf("no logical volume with id: %s", request.Id)
+	}
 }
