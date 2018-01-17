@@ -245,9 +245,14 @@
   packages = ["."]
   revision = "d670f9405373e636a5a2765eea47fac0c9bc91a4"
 
+[[projects]]
+  name = "stathat.com/c/consistent"
+  packages = ["."]
+  revision = "ad91dc4a3a642859730ff3d65929fce009bfdc23"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "16a6618a13666dfb31d93fe512f3267a0bfad9a3954f497ebf13d76ef3deeed2"
+  inputs-digest = "91d98d800a8ea77e4b3d54e757ba30ac6c070297669f44dd5aa1333fad1348eb"
   solver-name = "gps-cdcl"
   solver-version = 1

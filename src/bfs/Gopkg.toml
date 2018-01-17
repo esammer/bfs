@@ -45,3 +45,7 @@
 [[constraint]]
   name = "github.com/coreos/etcd"
   version = "v3.3.0-rc.2"
+
+[[constraint]]
+  name = "stathat.com/c/consistent"
+  revision = "ad91dc4a3a642859730ff3d65929fce009bfdc23"

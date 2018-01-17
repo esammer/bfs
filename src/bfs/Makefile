@@ -4,6 +4,7 @@ DEP = dep
 PACKAGES = . \
 	$(PROJECT)/block \
 	$(PROJECT)/blockservice \
+	$(PROJECT)/client \
 	$(PROJECT)/config \
 	$(PROJECT)/file \
 	$(PROJECT)/host \
@@ -20,6 +21,7 @@ PACKAGES = . \
 PROJECT_DIRS = . \
 	block \
 	blockservice \
+	client \
 	config \
 	file \
 	host \
