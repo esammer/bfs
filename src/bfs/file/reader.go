@@ -99,6 +99,7 @@ func (this *LocalFileReader) Read(buffer []byte) (int, error) {
 		}
 
 		if this.blockBuf == nil {
+			this.blockPos = 0
 			this.receiveCalls++
 
 			glog.V(2).Info("Receiving new chunk from block service")
