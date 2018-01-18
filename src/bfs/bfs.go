@@ -2,8 +2,8 @@ package main
 
 import (
 	"bfs/blockservice"
+	"bfs/client"
 	"bfs/config"
-	"bfs/file"
 	"bfs/nameservice"
 	"bfs/ns"
 	"bfs/registryservice"
@@ -14,11 +14,13 @@ import (
 	"fmt"
 	"github.com/coreos/etcd/clientv3"
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"io"
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -47,10 +49,10 @@ func (this *ListValue) String() string {
 }
 
 type BFSServer struct {
-	*config.HostConfig
-	*config.BlockServiceConfig
-	*config.NameServiceConfig
-	*config.RegistryServiceConfig
+	HostConfig            *config.HostConfig
+	BlockServiceConfig    *config.BlockServiceConfig
+	NameServiceConfig     *config.NameServiceConfig
+	RegistryServiceConfig *config.RegistryServiceConfig
 
 	PhysicalVolumes []*blockservice.PhysicalVolume
 }
@@ -79,6 +81,7 @@ func (this *BFSServer) configure() error {
 	serverFlags.BoolVar(&allowAutoInit, "a", false, "allow auto-initialization of physical volumes")
 	serverFlags.StringVar(&bindAddress, "bind", "127.0.0.1:60000", "bind address")
 	serverFlags.StringVar(&nsConfig.Path, "ns", "", "namespace directory")
+	serverFlags.StringVar(&hostConfig.Id, "id", "", "node id")
 	serverFlags.Var(&hostLabels, "label", "host labels")
 
 	flag.CommandLine.VisitAll(func(f *flag.Flag) {
@@ -159,8 +162,10 @@ func (this *BFSServer) configure() error {
 	hostConfig.BlockServiceConfig = bsConfig
 	hostConfig.RegistryServiceConfig = rsConfig
 	hostConfig.Labels = parsedLabels
-	hostConfig.Id = hostname
 	hostConfig.Hostname = hostname
+	if hostConfig.Id == "" {
+		hostConfig.Id = hostname
+	}
 
 	this.HostConfig = hostConfig
 
@@ -175,6 +180,7 @@ func (this *BFSServer) start() error {
 	for i, pvConfig := range bsConfig.VolumeConfigs {
 		pvs[i] = blockservice.NewPhysicalVolume(pvConfig.Path)
 		pvs[i].Open(pvConfig.AllowAutoInitialize)
+		bsConfig.VolumeConfigs[i].Id = pvs[i].ID.String()
 	}
 
 	// Assemble the name service
@@ -193,6 +199,36 @@ func (this *BFSServer) start() error {
 		return err
 	}
 	defer etcdClient.Close()
+
+	hostLease, err := etcdClient.Grant(context.Background(), 10)
+	if err != nil {
+		return err
+	}
+
+	keepAliveChan, err := etcdClient.KeepAlive(context.Background(), hostLease.ID)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		glog.V(2).Infof("Keep alive process starting")
+
+		for pulse := range keepAliveChan {
+			glog.V(2).Infof("Pulse: lease id: %v ttl: %d", pulse.ID, pulse.TTL)
+		}
+
+		glog.V(2).Info("Keep alive process complete")
+	}()
+
+	_, err = etcdClient.Put(
+		context.Background(),
+		filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdHostsPrefix, this.HostConfig.Id),
+		proto.MarshalTextString(this.HostConfig),
+		clientv3.WithLease(hostLease.ID),
+	)
+	if err != nil {
+		return err
+	}
 
 	// Create the services
 	nameService := nameservice.New(namespace)
@@ -280,7 +316,7 @@ func (this *BFSServer) start() error {
 			}
 
 			_, err := registryService.HostStatus(context.Background(), &registryservice.HostStatusRequest{
-				Id:          this.Id,
+				Id:          this.HostConfig.Id,
 				VolumeStats: volumeStats,
 			})
 
@@ -309,32 +345,229 @@ func (this *BFSServer) start() error {
 	return nil
 }
 
-func main() {
-	c := &Config{}
+type BFSClient struct {
+	Client *client.Client
+}
+
+func (this *BFSClient) Run() error {
+	var etcdEndpoints string
+	var blockSize int
 
 	clientFlags := flag.NewFlagSet("client", flag.ContinueOnError)
-	clientFlags.StringVar(&c.BindAddress, "server", "", "server host:port")
-	clientFlags.IntVar(&c.BlockSize, "block-size", 0, "block size for write (in MB)")
+	clientFlags.StringVar(&etcdEndpoints, "etcd", "http://localhost:2379", "comma separated list of etcd host:port")
+	clientFlags.IntVar(&blockSize, "block-size", 8, "block size for write (in MB)")
 	flag.CommandLine.VisitAll(func(f *flag.Flag) {
 		clientFlags.Var(f.Value, f.Name, f.Usage)
 	})
 
-	flag.Parse()
+	clientFlags.Parse(os.Args[2:])
 
+	flag.Parse()
+	clientArgs := clientFlags.Args()
+
+	cli, err := client.New(strings.Split(etcdEndpoints, ","))
+	if err != nil {
+		return err
+	}
+
+	switch clientArgs[0] {
+	case "ls":
+		startKey := ""
+		endKey := ""
+
+		if len(clientArgs) > 1 {
+			startKey = clientArgs[1]
+		}
+		if len(clientArgs) > 2 {
+			endKey = clientArgs[2]
+		}
+
+		resultChan := cli.List(startKey, endKey)
+		for entry := range resultChan {
+			fmt.Printf("%s %d %d\n", entry.Path, entry.Size, len(entry.Blocks))
+		}
+	case "put":
+		if len(clientArgs) != 3 {
+			return errors.New("usage: put <source file> <dest file>")
+		}
+
+		reader, err := os.Open(clientArgs[1])
+		if err != nil {
+			return err
+		}
+		defer reader.Close()
+
+		writer, err := cli.Create(clientArgs[2], blockSize*size.MB)
+		if err != nil {
+			return err
+		}
+
+		writeLen, err := io.Copy(writer, reader)
+		if err != nil && err != io.EOF {
+			return err
+		}
+
+		if err := writer.Close(); err != nil {
+			return err
+		}
+
+		fmt.Printf("Copied %s -> %s (%d bytes)\n", clientArgs[1], clientArgs[2], writeLen)
+	case "get":
+		if len(clientArgs) != 3 {
+			return errors.New("usage: get <source file> <dest file>")
+		}
+
+		reader, err := cli.Open(clientArgs[1])
+		if err != nil {
+			return err
+		}
+		defer reader.Close()
+
+		writer, err := os.Create(clientArgs[2])
+		if err != nil {
+			return err
+		}
+
+		writeLen, err := io.Copy(writer, reader)
+		if err != nil && err != io.EOF {
+			return err
+		}
+
+		if err := writer.Close(); err != nil {
+			return err
+		}
+
+		fmt.Printf("Copied %s -> %s (%d bytes)\n", clientArgs[1], clientArgs[2], writeLen)
+	case "stat":
+		if len(clientArgs) != 2 {
+			return errors.New("usage: stat <file>")
+		}
+
+		entry, err := cli.Stat(clientArgs[1])
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("%s %d (%d blocks, %d replica(s), %d block size)\n",
+			entry.Path,
+			entry.Size,
+			len(entry.Blocks),
+			entry.ReplicationLevel,
+			entry.BlockSize,
+		)
+
+		for i, block := range entry.Blocks {
+			fmt.Printf("  %3d: block: %s pv: %s\n", i, block.BlockId, block.PvId)
+		}
+	case "mv":
+		if len(clientArgs) != 3 {
+			return errors.New("usage: mv <source file> <dest file>")
+		}
+
+		if err := cli.Rename(clientArgs[1], clientArgs[2]); err != nil {
+			return err
+		}
+	case "rm":
+		if len(clientArgs) < 2 {
+			return errors.New("usage: rm <file> [file...]")
+		}
+
+		if err := cli.Remove(clientArgs[1]); err != nil {
+			return err
+		}
+	case "pvs":
+		hostConfigs := cli.Hosts()
+		for _, hostConfig := range hostConfigs {
+			for _, pv := range hostConfig.BlockServiceConfig.VolumeConfigs {
+				fmt.Printf("%s %s\n", pv.Id, hostConfig.Hostname)
+			}
+		}
+	case "lvs":
+		lvs, err := cli.ListVolumes()
+		if err != nil {
+			return err
+		}
+
+		for _, lvConfig := range lvs {
+			fmt.Printf("Logical volume: %s %s\n", lvConfig.Id, strings.Join(lvConfig.PvIds, ", "))
+			for _, label := range lvConfig.Labels {
+				fmt.Printf("%15s = %s\n", label.Key, label.Value)
+			}
+		}
+	case "lvcreate":
+		if len(clientArgs) != 4 {
+			return errors.New("usage: lvcreate <id> <pv,pv,pv...> <key1=value1,key2=value2,...>")
+		}
+
+		labelPairs := strings.Split(clientArgs[3], ",")
+		labels := make([]*config.Label, len(labelPairs))
+
+		for i, labelPair := range labelPairs {
+			components := strings.Split(labelPair, "=")
+			labels[i] = &config.Label{Key: components[0], Value: components[1]}
+		}
+
+		err := cli.CreateLogicalVolume(&config.LogicalVolumeConfig{
+			Id:     clientArgs[1],
+			PvIds:  strings.Split(clientArgs[2], ","),
+			Labels: labels,
+		})
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("Created logical volume: %s\n", clientArgs[1])
+	case "lvdestroy":
+		if len(clientArgs) != 2 {
+			return errors.New("usage: lvdestroy <id>")
+		}
+
+		ok, err := cli.DeleteLogicalVolume(clientArgs[1])
+		if err != nil {
+			return err
+		}
+
+		if ok {
+			fmt.Printf("Deleted volume %s\n", clientArgs[1])
+		} else {
+			fmt.Printf("No such volume %s\n", clientArgs[1])
+		}
+	default:
+		return fmt.Errorf("unknown command %s", clientArgs[0])
+	}
+
+	glog.V(2).Infof("Client memory footprint: ~%.02fKB", float64(cli.Stats())/1024.0)
+
+	return nil
+}
+
+func main() {
 	args := os.Args
+
+	var err error
+
 	if len(args) > 2 {
 		switch args[1] {
 		case "client":
-			clientFlags.Parse(args[2:])
-			c.ExtraArgs = clientFlags.Args()
-			runClient(c)
+			cli := &BFSClient{}
+			err = cli.Run()
 		case "server":
 			server := &BFSServer{}
-			server.Run()
+			err = server.Run()
+		default:
+			err = fmt.Errorf("unknown command %s", args[1])
 		}
+	} else {
+		err = fmt.Errorf("usage: %s <client | server> [command options...]", args[0])
+	}
+
+	if err != nil {
+		glog.Errorf("Error: %s", err.Error())
+		os.Exit(1)
 	}
 }
 
+/*
 func runClient(config *Config) {
 	conn, err := grpc.Dial(config.BindAddress, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
@@ -390,7 +623,8 @@ func runClient(config *Config) {
 		}
 		defer reader.Close()
 
-		writer, err := file.NewWriter(nameClient, blockClient, "1", config.ExtraArgs[2], config.BlockSize)
+		// FIXME
+		writer, err := file.NewWriter(nameClient, blockClient, nil, config.ExtraArgs[2], config.BlockSize)
 		if err != nil {
 			glog.Errorf("Unable to open writer %s - %v", config.ExtraArgs[2], err)
 			return
@@ -512,3 +746,4 @@ func runClient(config *Config) {
 		glog.Errorf("Unknown command %s", config.ExtraArgs[0])
 	}
 }
+*/

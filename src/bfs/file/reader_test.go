@@ -84,7 +84,7 @@ func TestLocalFileReader_Read(t *testing.T) {
 
 	_, err = nameClient.AddVolume(context.Background(), &nameservice.AddVolumeRequest{VolumeId: "1", PvIds: pvIds})
 
-	writer, err := NewWriter(nameClient, blockClient, "1", "/test.txt", size.MB)
+	writer, err := NewWriter(nameClient, blockClient, pvIds, "/test.txt", size.MB)
 	require.NoError(t, err)
 
 	_, err = writer.Write(zeroBuf)

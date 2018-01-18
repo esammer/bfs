@@ -85,7 +85,7 @@ func TestLocalFileWriter_Write(t *testing.T) {
 
 	_, err = nameClient.AddVolume(context.Background(), &nameservice.AddVolumeRequest{VolumeId: "1", PvIds: pvIds})
 
-	writer, err := NewWriter(nameClient, blockClient, "1", "/test.txt", size.MB)
+	writer, err := NewWriter(nameClient, blockClient, pvIds, "/test.txt", size.MB)
 	require.NoError(t, err)
 
 	writeLen, err := writer.Write(zeroBuf)
@@ -218,7 +218,7 @@ func BenchmarkLocalFileWriter_Write(b *testing.B) {
 								)
 
 								for i := 0; i < b.N; i++ {
-									writer, err := NewWriter(nameClient, blockClient, "1", "/test.txt", blockSize)
+									writer, err := NewWriter(nameClient, blockClient, pvIds, "/test.txt", blockSize)
 									require.NoError(b, err)
 
 									for j := 0; j < writeCount; j++ {

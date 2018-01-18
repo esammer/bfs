@@ -40,20 +40,15 @@ type LocalFileWriter struct {
 	pvSelectionSeed int
 }
 
-func NewWriter(nameClient nameservice.NameServiceClient, blockClient blockservice.BlockServiceClient, volumeId string,
+func NewWriter(nameClient nameservice.NameServiceClient, blockClient blockservice.BlockServiceClient, pvIds []string,
 	filename string, blockSize int) (*LocalFileWriter, error) {
 
 	glog.V(2).Infof("Allocate writer for %v with blockSize %d", filename, blockSize)
 
-	volumeInfo, err := nameClient.VolumeInfo(context.Background(), &nameservice.VolumeInfoRequest{VolumeId: volumeId})
-	if err != nil {
-		return nil, err
-	}
-
 	return &LocalFileWriter{
 		nameClient:      nameClient,
 		blockClient:     blockClient,
-		pvIds:           volumeInfo.PvIds,
+		pvIds:           pvIds,
 		blockSize:       blockSize,
 		filename:        filename,
 		blockList:       make([]*nameservice.BlockMetadata, 0, 16),
