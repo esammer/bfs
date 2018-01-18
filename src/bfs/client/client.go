@@ -47,6 +47,10 @@ func New(endpoints []string) (*Client, error) {
 		return nil, err
 	}
 
+	return NewWithEtcd(etcdClient)
+}
+
+func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 	client := &Client{
 		etcdClient:    etcdClient,
 		hostConfigs:   make(map[string]*config.HostConfig, 64),
@@ -56,13 +60,50 @@ func New(endpoints []string) (*Client, error) {
 
 	client.hash.NumberOfReplicas = 10
 
-	volumesResp, err := etcdClient.Get(
+	if err := client.startVolumeUpdater(); err != nil {
+		return nil, err
+	}
+
+	if err := client.startHostUpdater(); err != nil {
+		return nil, err
+	}
+
+	client.clientLRU = lru.NewCache(
+		2,
+		func(name string) (interface{}, error) {
+			glog.V(2).Infof("Creating new connection for %s", name)
+
+			conn, err := grpc.Dial(name, grpc.WithBlock(), grpc.WithInsecure())
+			if err != nil {
+				return nil, err
+			}
+
+			c := &serviceClient{
+				conn:        conn,
+				nameClient:  nameservice.NewNameServiceClient(conn),
+				blockClient: blockservice.NewBlockServiceClient(conn),
+			}
+
+			return c, nil
+		},
+		func(name string, value interface{}) error {
+			glog.V(2).Infof("Destroying connection for %s", name)
+
+			return value.(*serviceClient).conn.Close()
+		},
+	)
+
+	return client, nil
+}
+
+func (this *Client) startVolumeUpdater() error {
+	volumesResp, err := this.etcdClient.Get(
 		context.Background(),
 		filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdVolumesPrefix),
 		clientv3.WithPrefix(),
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	for _, kv := range volumesResp.Kvs {
@@ -86,17 +127,17 @@ func New(endpoints []string) (*Client, error) {
 				continue
 			}
 
-			client.volumeConfigs[mount] = lvConfig
+			this.volumeConfigs[mount] = lvConfig
 		}
 	}
 
 	ctx, volumesWatchCancel := context.WithCancel(context.Background())
-	client.volumesWatchCancel = volumesWatchCancel
+	this.volumesWatchCancel = volumesWatchCancel
 
 	go func() {
 		glog.V(2).Infof("Volume watcher process starting")
 
-		volumesWatchChan := etcdClient.Watch(
+		volumesWatchChan := this.etcdClient.Watch(
 			ctx,
 			filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdVolumesPrefix),
 			clientv3.WithPrefix(),
@@ -128,9 +169,9 @@ func New(endpoints []string) (*Client, error) {
 
 				switch event.Type {
 				case mvccpb.PUT:
-					client.volumeConfigs[mount] = lvConfig
+					this.volumeConfigs[mount] = lvConfig
 				case mvccpb.DELETE:
-					delete(client.volumeConfigs, mount)
+					delete(this.volumeConfigs, mount)
 				default:
 					glog.Warningf("Unknown event type %v received in volume watcher", event.Type)
 				}
@@ -140,13 +181,17 @@ func New(endpoints []string) (*Client, error) {
 		glog.V(2).Infof("Volume watcher process complete")
 	}()
 
-	hostResp, err := etcdClient.Get(
+	return nil
+}
+
+func (this *Client) startHostUpdater() error {
+	hostResp, err := this.etcdClient.Get(
 		context.Background(),
 		filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdHostsPrefix),
 		clientv3.WithPrefix(),
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	for _, kv := range hostResp.Kvs {
@@ -158,18 +203,18 @@ func New(endpoints []string) (*Client, error) {
 			glog.Warningf("Unable to deserialize host config from %s - %v", string(kv.Key), err)
 			continue
 		} else {
-			client.hostConfigs[hostConfig.Id] = hostConfig
-			client.hash.Add(hostConfig.Id)
+			this.hostConfigs[hostConfig.Id] = hostConfig
+			this.hash.Add(hostConfig.Id)
 		}
 	}
 
 	ctx, hostWatchCancel := context.WithCancel(context.Background())
-	client.hostsWatchCancel = hostWatchCancel
+	this.hostsWatchCancel = hostWatchCancel
 
 	go func() {
 		glog.V(2).Infof("Hosts watcher process starting")
 
-		hostsWatchChan := etcdClient.Watch(
+		hostsWatchChan := this.etcdClient.Watch(
 			ctx,
 			filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdHostsPrefix),
 			clientv3.WithPrefix(),
@@ -188,11 +233,11 @@ func New(endpoints []string) (*Client, error) {
 
 				switch event.Type {
 				case mvccpb.PUT:
-					client.hostConfigs[hostConfig.Id] = hostConfig
-					client.hash.Add(hostConfig.Id)
+					this.hostConfigs[hostConfig.Id] = hostConfig
+					this.hash.Add(hostConfig.Id)
 				case mvccpb.DELETE:
-					delete(client.hostConfigs, hostConfig.Id)
-					client.hash.Remove(hostConfig.Id)
+					delete(this.hostConfigs, hostConfig.Id)
+					this.hash.Remove(hostConfig.Id)
 				default:
 					glog.Warningf("Unknown event type %v received in host watcher", event.Type)
 				}
@@ -202,32 +247,7 @@ func New(endpoints []string) (*Client, error) {
 		glog.V(2).Infof("Hosts watcher process complete")
 	}()
 
-	client.clientLRU = lru.NewCache(
-		2,
-		func(name string) (interface{}, error) {
-			glog.V(2).Infof("Creating new connection for %s", name)
-
-			conn, err := grpc.Dial(name, grpc.WithBlock(), grpc.WithInsecure())
-			if err != nil {
-				return nil, err
-			}
-
-			c := &serviceClient{
-				conn:        conn,
-				nameClient:  nameservice.NewNameServiceClient(conn),
-				blockClient: blockservice.NewBlockServiceClient(conn),
-			}
-
-			return c, nil
-		},
-		func(name string, value interface{}) error {
-			glog.V(2).Infof("Destroying connection for %s", name)
-
-			return value.(*serviceClient).conn.Close()
-		},
-	)
-
-	return client, nil
+	return nil
 }
 
 func (this *Client) Hosts() []*config.HostConfig {
@@ -449,6 +469,7 @@ func (this *Client) Close() error {
 	if this.volumesWatchCancel != nil {
 		this.volumesWatchCancel()
 	}
+
 	if this.hostsWatchCancel != nil {
 		this.hostsWatchCancel()
 	}
