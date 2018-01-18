@@ -2,75 +2,55 @@ package blockserver
 
 import (
 	"bfs/blockservice"
+	"bfs/config"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
-	"net"
 )
 
 type BlockServer struct {
-	Paths       []string
-	BindAddress string
-	Options     []grpc.ServerOption
+	Config *config.BlockServiceConfig
+	server *grpc.Server
 
 	PhysicalVolumes []*blockservice.PhysicalVolume
+}
 
-	server      *grpc.Server
-	rpcDoneChan chan error
+func New(config *config.BlockServiceConfig, server *grpc.Server) *BlockServer {
+	return &BlockServer{
+		Config: config,
+		server: server,
+	}
 }
 
 func (this *BlockServer) Start() error {
-	glog.V(1).Infof("Starting block server %s", this.BindAddress)
+	glog.V(1).Infof("Starting block server %s", this.Config.BindAddress)
 
-	this.PhysicalVolumes = make([]*blockservice.PhysicalVolume, len(this.Paths))
+	this.PhysicalVolumes = make([]*blockservice.PhysicalVolume, len(this.Config.VolumeConfigs))
 
-	this.rpcDoneChan = make(chan error)
+	for i, pvConfig := range this.Config.VolumeConfigs {
+		this.PhysicalVolumes[i] = blockservice.NewPhysicalVolume(pvConfig.Path)
 
-	for i, path := range this.Paths {
-		this.PhysicalVolumes[i] = blockservice.NewPhysicalVolume(path)
-
-		if err := this.PhysicalVolumes[i].Open(true); err != nil {
+		if err := this.PhysicalVolumes[i].Open(pvConfig.AllowAutoInitialize); err != nil {
 			for j := 0; j < i; j++ {
 				this.PhysicalVolumes[j].Close()
 			}
 
 			return err
 		}
+
+		// Hack for populating pv ID. Requiring mutability here sucks.
+		pvConfig.Id = this.PhysicalVolumes[i].ID.String()
 	}
 
 	blockService := blockservice.New(this.PhysicalVolumes)
-	listener, err := net.Listen("tcp", this.BindAddress)
-	if err != nil {
-		return err
-	}
-
-	this.server = grpc.NewServer(this.Options...)
 	blockservice.RegisterBlockServiceServer(this.server, blockService)
 
-	go func() {
-		glog.V(1).Infof("Starting block server RPC")
-
-		err := this.server.Serve(listener)
-		if err != nil {
-			glog.Errorf("RPC server failed - %v", err)
-		}
-
-		glog.V(1).Infof("Stopped block server RPC")
-		this.rpcDoneChan <- err
-	}()
-
-	glog.V(1).Infof("Started block server %s", this.BindAddress)
+	glog.V(1).Infof("Started block server %s", this.Config.BindAddress)
 
 	return nil
 }
 
 func (this *BlockServer) Stop() error {
-	glog.V(1).Infof("Stopping block server %s", this.BindAddress)
-
-	this.server.GracefulStop()
-	err := <-this.rpcDoneChan
-	if err != nil {
-		return err
-	}
+	glog.V(1).Infof("Stopping block server %s", this.Config.BindAddress)
 
 	for _, pv := range this.PhysicalVolumes {
 		if err := pv.Close(); err != nil {
@@ -78,7 +58,7 @@ func (this *BlockServer) Stop() error {
 		}
 	}
 
-	glog.V(1).Infof("Stopped block server %s", this.BindAddress)
+	glog.V(1).Infof("Stopped block server %s", this.Config.BindAddress)
 
 	return nil
 }

@@ -2,6 +2,7 @@ package blockserver
 
 import (
 	"bfs/blockservice"
+	"bfs/config"
 	"bfs/test"
 	"bfs/util/size"
 	"bytes"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"net"
 	"path/filepath"
 	"testing"
 )
@@ -21,22 +23,34 @@ func TestBlockServer(t *testing.T) {
 	require.NoError(t, testDir.Create())
 	defer testDir.Destroy()
 
-	server := &BlockServer{
-		BindAddress: "127.0.0.1:8086",
-		Paths: []string{
-			filepath.Join(testDir.Path, "1"),
+	bsc := &config.BlockServiceConfig{
+		BindAddress: "localhost:8086",
+		VolumeConfigs: []*config.PhysicalVolumeConfig{
+			{Path: filepath.Join(testDir.Path, "1"), AllowAutoInitialize: true},
+			{Path: filepath.Join(testDir.Path, "2"), AllowAutoInitialize: true},
 		},
 	}
 
+	listener, err := net.Listen("tcp", bsc.BindAddress)
+	require.NoError(t, err)
+	rpcServer := grpc.NewServer()
+	defer rpcServer.GracefulStop()
+
+	server := New(bsc, rpcServer)
 	require.NoError(t, server.Start())
 	defer func() { assert.NoError(t, server.Stop()) }()
 
-	conn, err := grpc.Dial(server.BindAddress, grpc.WithInsecure(), grpc.WithBlock())
+	go func() {
+		err := rpcServer.Serve(listener)
+		assert.NoError(t, err)
+	}()
+
+	conn, err := grpc.Dial(bsc.BindAddress, grpc.WithInsecure(), grpc.WithBlock())
 	require.NoError(t, err)
 	defer conn.Close()
 
-	bsc := blockservice.NewBlockServiceClient(conn)
-	writeStream, err := bsc.Write(context.Background())
+	bsClient := blockservice.NewBlockServiceClient(conn)
+	writeStream, err := bsClient.Write(context.Background())
 	require.NoError(t, err)
 
 	err = writeStream.Send(&blockservice.WriteRequest{
@@ -48,7 +62,7 @@ func TestBlockServer(t *testing.T) {
 	writeResp, err := writeStream.CloseAndRecv()
 	require.NoError(t, err)
 
-	_, err = bsc.Delete(
+	_, err = bsClient.Delete(
 		context.Background(),
 		&blockservice.ReadRequest{
 			VolumeId: server.PhysicalVolumes[0].ID.String(),

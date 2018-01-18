@@ -2,6 +2,7 @@ package file
 
 import (
 	"bfs/blockservice"
+	"bfs/config"
 	"bfs/nameservice"
 	"bfs/server/blockserver"
 	"bfs/server/nameserver"
@@ -14,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"io"
+	"net"
 	"path/filepath"
 	"testing"
 )
@@ -25,27 +27,49 @@ func TestLocalFileReader_Read(t *testing.T) {
 
 	require.NoError(t, testDir.Create())
 	defer func() {
-		glog.Info("Removing temp directory")
 		testDir.Destroy()
-		glog.Info("Removed temp directory")
 	}()
 
-	blockServer := blockserver.BlockServer{
-		BindAddress: "127.0.0.1:8083",
-		Paths:       []string{filepath.Join(testDir.Path, "block")},
-		Options: []grpc.ServerOption{
-			grpc.WriteBufferSize(size.MB * 8),
-			grpc.ReadBufferSize(size.MB * 8),
-			grpc.MaxRecvMsgSize(size.MB * 10),
-			grpc.MaxSendMsgSize(size.MB * 10),
+	rpcServer := grpc.NewServer(
+		grpc.WriteBufferSize(size.MB*8),
+		grpc.ReadBufferSize(size.MB*8),
+		grpc.MaxRecvMsgSize(size.MB*10),
+		grpc.MaxSendMsgSize(size.MB*10),
+	)
+	defer rpcServer.GracefulStop()
+
+	blockServer := blockserver.New(
+		&config.BlockServiceConfig{
+			BindAddress: "localhost:8084",
+			VolumeConfigs: []*config.PhysicalVolumeConfig{
+				{Path: filepath.Join(testDir.Path, "pv1"), AllowAutoInitialize: true},
+				{Path: filepath.Join(testDir.Path, "pv2"), AllowAutoInitialize: true},
+			},
 		},
-	}
-	err := blockServer.Start()
-	require.NoError(t, err)
+		rpcServer,
+	)
+
+	require.NoError(t, blockServer.Start())
 	defer func() { assert.NoError(t, blockServer.Stop()) }()
 
+	nameServer := nameserver.New(
+		&config.NameServiceConfig{
+			BindAddress:      "localhost:8084",
+			AdvertiseAddress: "localhost:8084",
+			Path:             filepath.Join(testDir.Path, "ns"),
+		},
+		rpcServer,
+	)
+	require.NoError(t, nameServer.Start())
+	defer func() { assert.NoError(t, nameServer.Stop()) }()
+
+	listener, err := net.Listen("tcp", blockServer.Config.BindAddress)
+	go func() {
+		assert.NoError(t, rpcServer.Serve(listener))
+	}()
+
 	blockConn, err := grpc.Dial(
-		blockServer.BindAddress,
+		blockServer.Config.BindAddress,
 		grpc.WithInsecure(),
 		grpc.WithBlock(),
 		grpc.WithWriteBufferSize(size.MB*8),
@@ -57,16 +81,8 @@ func TestLocalFileReader_Read(t *testing.T) {
 
 	blockClient := blockservice.NewBlockServiceClient(blockConn)
 
-	nameServer := nameserver.NameServer{
-		BindAddress: "127.0.0.1:8084",
-		Path:        filepath.Join(testDir.Path, "name"),
-	}
-	err = nameServer.Start()
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, nameServer.Stop()) }()
-
 	nameConn, err := grpc.Dial(
-		nameServer.BindAddress,
+		nameServer.Config.BindAddress,
 		grpc.WithInsecure(),
 		grpc.WithBlock(),
 	)
@@ -82,7 +98,7 @@ func TestLocalFileReader_Read(t *testing.T) {
 		pvIds[i] = pv.ID.String()
 	}
 
-	_, err = nameClient.AddVolume(context.Background(), &nameservice.AddVolumeRequest{VolumeId: "1", PvIds: pvIds})
+	_, err = nameClient.AddVolume(context.Background(), &nameservice.AddVolumeRequest{VolumeId: "/", PvIds: pvIds})
 
 	writer, err := NewWriter(nameClient, blockClient, pvIds, "/test.txt", size.MB)
 	require.NoError(t, err)
