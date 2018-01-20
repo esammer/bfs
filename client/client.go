@@ -102,7 +102,7 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 func (this *Client) startVolumeUpdater() error {
 	volumesResp, err := this.etcdClient.Get(
 		context.Background(),
-		filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdVolumesPrefix),
+		filepath.Join(DefaultEtcdPrefix, EtcdVolumesPrefix),
 		clientv3.WithPrefix(),
 	)
 	if err != nil {
@@ -142,7 +142,7 @@ func (this *Client) startVolumeUpdater() error {
 
 		volumesWatchChan := this.etcdClient.Watch(
 			ctx,
-			filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdVolumesPrefix),
+			filepath.Join(DefaultEtcdPrefix, EtcdVolumesPrefix),
 			clientv3.WithPrefix(),
 			clientv3.WithRev(volumesResp.Header.Revision),
 		)
@@ -190,7 +190,7 @@ func (this *Client) startVolumeUpdater() error {
 func (this *Client) startHostUpdater() error {
 	hostResp, err := this.etcdClient.Get(
 		context.Background(),
-		filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdHostsPrefix),
+		filepath.Join(DefaultEtcdPrefix, EtcdHostsPrefix),
 		clientv3.WithPrefix(),
 	)
 	if err != nil {
@@ -238,7 +238,7 @@ func (this *Client) startHostUpdater() error {
 
 		hostsWatchChan := this.etcdClient.Watch(
 			ctx,
-			filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdHostsPrefix, registryservice.EtcdHostsConfigPrefix),
+			filepath.Join(DefaultEtcdPrefix, EtcdHostsPrefix, EtcdHostsConfigPrefix),
 			clientv3.WithPrefix(),
 			clientv3.WithRev(hostResp.Header.Revision),
 		)
@@ -469,7 +469,7 @@ func (this *Client) List(startKey string, endKey string) <-chan *nameservice.Ent
 func (this *Client) CreateLogicalVolume(volumeConfig *config.LogicalVolumeConfig) error {
 	_, err := this.etcdClient.Put(
 		context.Background(),
-		filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdVolumesPrefix, volumeConfig.Id),
+		filepath.Join(DefaultEtcdPrefix, EtcdVolumesPrefix, volumeConfig.Id),
 		proto.MarshalTextString(volumeConfig),
 	)
 	if err != nil {
@@ -482,7 +482,7 @@ func (this *Client) CreateLogicalVolume(volumeConfig *config.LogicalVolumeConfig
 func (this *Client) DeleteLogicalVolume(volumeId string) (bool, error) {
 	resp, err := this.etcdClient.Delete(
 		context.Background(),
-		filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdVolumesPrefix, volumeId),
+		filepath.Join(DefaultEtcdPrefix, EtcdVolumesPrefix, volumeId),
 	)
 
 	return resp.Deleted == 1, err
@@ -491,7 +491,7 @@ func (this *Client) DeleteLogicalVolume(volumeId string) (bool, error) {
 func (this *Client) ListVolumes() ([]*config.LogicalVolumeConfig, error) {
 	getResp, err := this.etcdClient.Get(
 		context.Background(),
-		filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdVolumesPrefix),
+		filepath.Join(DefaultEtcdPrefix, EtcdVolumesPrefix),
 		clientv3.WithPrefix(),
 	)
 	if err != nil {

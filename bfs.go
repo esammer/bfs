@@ -216,7 +216,7 @@ func (this *BFSServer) start() error {
 	// Register or update host config
 	_, err = etcdClient.Put(
 		context.Background(),
-		filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdHostsPrefix, registryservice.EtcdHostsConfigPrefix, this.HostConfig.Id),
+		filepath.Join(client.DefaultEtcdPrefix, client.EtcdHostsPrefix, client.EtcdHostsConfigPrefix, this.HostConfig.Id),
 		proto.MarshalTextString(this.HostConfig),
 	)
 	if err != nil {
@@ -297,7 +297,7 @@ func (this *BFSServer) start() error {
 			// Register for service.
 			_, err = etcdClient.Put(
 				context.Background(),
-				filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdHostsPrefix, registryservice.EtcdHostsStatusPrefix, this.HostConfig.Id),
+				filepath.Join(client.DefaultEtcdPrefix, client.EtcdHostsPrefix, client.EtcdHostsStatusPrefix, this.HostConfig.Id),
 				proto.MarshalTextString(&registryservice.HostStatus{
 					Id:          this.HostConfig.Id,
 					FirstSeen:   0,

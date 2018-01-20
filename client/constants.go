@@ -1,4 +1,4 @@
-package registryservice
+package client
 
 const (
 	// The default etcd key prefix. All keys will be prefixed with this value unless overridden.
@@ -9,7 +9,8 @@ const (
 	// The etcd key prefix under which hosts are registered.
 	// This value is appended to the configured prefix or DefaultEtcdPrefix, otherwise.
 	EtcdHostsPrefix = "/hosts"
-
-	EtcdHostsStatusPrefix = "/status"
+	// The etcd key prefix under which host configuration is kept. This value is appended to EtcdHostsPrefix.
 	EtcdHostsConfigPrefix = "/config"
+	// The etcd key prefix under which host status is kept. This value is appended to EtcdHostsPrefix.
+	EtcdHostsStatusPrefix = "/status"
 )
