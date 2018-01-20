@@ -4,7 +4,6 @@ import (
 	"bfs/blockservice"
 	"bfs/client"
 	"bfs/config"
-	"bfs/registryservice"
 	"bfs/server/blockserver"
 	"bfs/server/nameserver"
 	"bfs/util/size"
@@ -251,7 +250,7 @@ func (this *BFSServer) start() error {
 	// Start health and status routine
 	go func() {
 		for t := range ticker.C {
-			volumeStats := make([]*registryservice.PhysicalVolumeStatus, 0, len(this.BlockServiceConfig.VolumeConfigs))
+			volumeStats := make([]*config.PhysicalVolumeStatus, 0, len(this.BlockServiceConfig.VolumeConfigs))
 
 			for _, pvConfig := range this.blockServer.Config.VolumeConfigs {
 				fsStat := syscall.Statfs_t{}
@@ -276,10 +275,10 @@ func (this *BFSServer) start() error {
 					mountPath = append(mountPath, rune(c))
 				}
 
-				volumeStat := &registryservice.PhysicalVolumeStatus{
+				volumeStat := &config.PhysicalVolumeStatus{
 					Id:   pvConfig.Id,
 					Path: pvConfig.Path,
-					FileSystemStatus: &registryservice.FileSystemStatus{
+					FileSystemStatus: &config.FileSystemStatus{
 						MountPath:       string(mountPath),
 						DevicePath:      string(devicePath),
 						IoSize:          fsStat.Iosize,
@@ -298,7 +297,7 @@ func (this *BFSServer) start() error {
 			_, err = etcdClient.Put(
 				context.Background(),
 				filepath.Join(client.DefaultEtcdPrefix, client.EtcdHostsPrefix, client.EtcdHostsStatusPrefix, this.HostConfig.Id),
-				proto.MarshalTextString(&registryservice.HostStatus{
+				proto.MarshalTextString(&config.HostStatus{
 					Id:          this.HostConfig.Id,
 					FirstSeen:   0,
 					LastSeen:    t.UnixNano(),

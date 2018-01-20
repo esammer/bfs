@@ -6,7 +6,6 @@ import (
 	"bfs/file"
 	"bfs/lru"
 	"bfs/nameservice"
-	"bfs/registryservice"
 	"context"
 	"fmt"
 	"github.com/coreos/etcd/clientv3"
@@ -30,7 +29,7 @@ type Client struct {
 	volumesWatchCancel    context.CancelFunc
 	hostConfigs           map[string]*config.HostConfig
 	hostsWatchCancel      context.CancelFunc
-	hostStatus            map[string]*registryservice.HostStatus
+	hostStatus            map[string]*config.HostStatus
 	hostStatusWatchCancel context.CancelFunc
 }
 
@@ -56,7 +55,7 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 	client := &Client{
 		etcdClient:    etcdClient,
 		hostConfigs:   make(map[string]*config.HostConfig, 64),
-		hostStatus:    make(map[string]*registryservice.HostStatus, 64),
+		hostStatus:    make(map[string]*config.HostStatus, 64),
 		volumeConfigs: make(map[string]*config.LogicalVolumeConfig, 4),
 		hash:          consistent.New(),
 	}
@@ -219,7 +218,7 @@ func (this *Client) startHostUpdater() error {
 				this.hash.Add(hostConfig.Id)
 			}
 		} else if entryType == "status" {
-			status := &registryservice.HostStatus{}
+			status := &config.HostStatus{}
 
 			if err := proto.UnmarshalText(string(kv.Value), status); err != nil {
 				glog.Warningf("Unable to deserialize host status from %s - %v", string(kv.Key), err)
@@ -274,7 +273,7 @@ func (this *Client) startHostUpdater() error {
 						}
 					}
 				} else if entryType == "status" {
-					status := &registryservice.HostStatus{}
+					status := &config.HostStatus{}
 
 					if err := proto.UnmarshalText(string(event.Kv.Value), status); err != nil {
 						glog.Warningf("Unable to deserialize host status from %s - %v", string(event.Kv.Key), err)
@@ -308,8 +307,8 @@ func (this *Client) Hosts() []*config.HostConfig {
 	return hostConfigs
 }
 
-func (this *Client) HostStatus() []*registryservice.HostStatus {
-	hostStatus := make([]*registryservice.HostStatus, 0, len(this.hostStatus))
+func (this *Client) HostStatus() []*config.HostStatus {
+	hostStatus := make([]*config.HostStatus, 0, len(this.hostStatus))
 	for _, v := range this.hostStatus {
 		hostStatus = append(hostStatus, v)
 	}
