@@ -9,4 +9,7 @@ const (
 	// The etcd key prefix under which hosts are registered.
 	// This value is appended to the configured prefix or DefaultEtcdPrefix, otherwise.
 	EtcdHostsPrefix = "/hosts"
+
+	EtcdHostsStatusPrefix = "/status"
+	EtcdHostsConfigPrefix = "/config"
 )

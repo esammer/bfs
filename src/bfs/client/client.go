@@ -26,10 +26,12 @@ type Client struct {
 	clientLRU  *lru.LRUCache
 	hash       *consistent.Consistent
 
-	volumeConfigs      map[string]*config.LogicalVolumeConfig
-	volumesWatchCancel context.CancelFunc
-	hostConfigs        map[string]*config.HostConfig
-	hostsWatchCancel   context.CancelFunc
+	volumeConfigs         map[string]*config.LogicalVolumeConfig
+	volumesWatchCancel    context.CancelFunc
+	hostConfigs           map[string]*config.HostConfig
+	hostsWatchCancel      context.CancelFunc
+	hostStatus            map[string]*registryservice.HostStatus
+	hostStatusWatchCancel context.CancelFunc
 }
 
 type serviceClient struct {
@@ -54,6 +56,7 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 	client := &Client{
 		etcdClient:    etcdClient,
 		hostConfigs:   make(map[string]*config.HostConfig, 64),
+		hostStatus:    make(map[string]*registryservice.HostStatus, 64),
 		volumeConfigs: make(map[string]*config.LogicalVolumeConfig, 4),
 		hash:          consistent.New(),
 	}
@@ -197,14 +200,33 @@ func (this *Client) startHostUpdater() error {
 	for _, kv := range hostResp.Kvs {
 		glog.V(2).Infof("Found host %s", string(kv.Key))
 
-		hostConfig := &config.HostConfig{}
-
-		if err := proto.UnmarshalText(string(kv.Value), hostConfig); err != nil {
-			glog.Warningf("Unable to deserialize host config from %s - %v", string(kv.Key), err)
+		pathComponents := strings.Split(string(kv.Key), string(filepath.Separator))
+		if len(pathComponents) < 4 {
+			glog.Warningf("Host key entry %s (components: %v) is of the wrong format - skipping", string(kv.Key), pathComponents)
 			continue
-		} else {
-			this.hostConfigs[hostConfig.Id] = hostConfig
-			this.hash.Add(hostConfig.Id)
+		}
+
+		entryType := pathComponents[len(pathComponents)-2]
+
+		if entryType == "config" {
+			hostConfig := &config.HostConfig{}
+
+			if err := proto.UnmarshalText(string(kv.Value), hostConfig); err != nil {
+				glog.Warningf("Unable to deserialize host config from %s - %v", string(kv.Key), err)
+				continue
+			} else {
+				this.hostConfigs[hostConfig.Id] = hostConfig
+				this.hash.Add(hostConfig.Id)
+			}
+		} else if entryType == "status" {
+			status := &registryservice.HostStatus{}
+
+			if err := proto.UnmarshalText(string(kv.Value), status); err != nil {
+				glog.Warningf("Unable to deserialize host status from %s - %v", string(kv.Key), err)
+				continue
+			} else {
+				this.hostStatus[status.Id] = status
+			}
 		}
 	}
 
@@ -216,7 +238,7 @@ func (this *Client) startHostUpdater() error {
 
 		hostsWatchChan := this.etcdClient.Watch(
 			ctx,
-			filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdHostsPrefix),
+			filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdHostsPrefix, registryservice.EtcdHostsConfigPrefix),
 			clientv3.WithPrefix(),
 			clientv3.WithRev(hostResp.Header.Revision),
 		)
@@ -225,21 +247,48 @@ func (this *Client) startHostUpdater() error {
 			for _, event := range watchEvent.Events {
 				glog.V(2).Infof("Update to host %s - %v", string(event.Kv.Key), event.Type)
 
-				hostConfig := &config.HostConfig{}
-				if err := proto.UnmarshalText(string(event.Kv.Value), hostConfig); err != nil {
-					glog.Warningf("Unable to deserialize host config from %s - %v", string(event.Kv.Key), err)
+				pathComponents := filepath.SplitList(string(event.Kv.Key))
+				if len(pathComponents) < 4 {
+					glog.Warning("Host key entry %s is of the wrong format - skipping", string(event.Kv.Key))
 					continue
 				}
 
-				switch event.Type {
-				case mvccpb.PUT:
-					this.hostConfigs[hostConfig.Id] = hostConfig
-					this.hash.Add(hostConfig.Id)
-				case mvccpb.DELETE:
-					delete(this.hostConfigs, hostConfig.Id)
-					this.hash.Remove(hostConfig.Id)
-				default:
-					glog.Warningf("Unknown event type %v received in host watcher", event.Type)
+				entryType := pathComponents[len(pathComponents)-2]
+
+				if entryType == "config" {
+					hostConfig := &config.HostConfig{}
+
+					if err := proto.UnmarshalText(string(event.Kv.Value), hostConfig); err != nil {
+						glog.Warningf("Unable to deserialize host config from %s - %v", string(event.Kv.Key), err)
+						continue
+					} else {
+						switch event.Type {
+						case mvccpb.PUT:
+							this.hostConfigs[hostConfig.Id] = hostConfig
+							this.hash.Add(hostConfig.Id)
+						case mvccpb.DELETE:
+							delete(this.hostConfigs, hostConfig.Id)
+							this.hash.Remove(hostConfig.Id)
+						default:
+							glog.Warningf("Unknown event type %v received in host watcher", event.Type)
+						}
+					}
+				} else if entryType == "status" {
+					status := &registryservice.HostStatus{}
+
+					if err := proto.UnmarshalText(string(event.Kv.Value), status); err != nil {
+						glog.Warningf("Unable to deserialize host status from %s - %v", string(event.Kv.Key), err)
+						continue
+					} else {
+						switch event.Type {
+						case mvccpb.PUT:
+							this.hostStatus[status.Id] = status
+						case mvccpb.DELETE:
+							delete(this.hostStatus, status.Id)
+						default:
+							glog.Warningf("Unknown event type %v received in host watcher", event.Type)
+						}
+					}
 				}
 			}
 		}
@@ -257,6 +306,15 @@ func (this *Client) Hosts() []*config.HostConfig {
 	}
 
 	return hostConfigs
+}
+
+func (this *Client) HostStatus() []*registryservice.HostStatus {
+	hostStatus := make([]*registryservice.HostStatus, 0, len(this.hostStatus))
+	for _, v := range this.hostStatus {
+		hostStatus = append(hostStatus, v)
+	}
+
+	return hostStatus
 }
 
 func (this *Client) Create(path string, blockSize int) (file.Writer, error) {

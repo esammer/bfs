@@ -4,9 +4,9 @@ import (
 	"bfs/blockservice"
 	"bfs/client"
 	"bfs/config"
-	"bfs/nameservice"
-	"bfs/ns"
 	"bfs/registryservice"
+	"bfs/server/blockserver"
+	"bfs/server/nameserver"
 	"bfs/util/size"
 	"context"
 	"errors"
@@ -49,10 +49,12 @@ func (this *ListValue) String() string {
 }
 
 type BFSServer struct {
-	HostConfig            *config.HostConfig
-	BlockServiceConfig    *config.BlockServiceConfig
-	NameServiceConfig     *config.NameServiceConfig
-	RegistryServiceConfig *config.RegistryServiceConfig
+	HostConfig         *config.HostConfig
+	BlockServiceConfig *config.BlockServiceConfig
+	NameServiceConfig  *config.NameServiceConfig
+
+	nameServer  *nameserver.NameServer
+	blockServer *blockserver.BlockServer
 
 	PhysicalVolumes []*blockservice.PhysicalVolume
 }
@@ -67,7 +69,6 @@ func (this *BFSServer) Run() error {
 func (this *BFSServer) configure() error {
 	hostConfig := &config.HostConfig{}
 	nsConfig := &config.NameServiceConfig{}
-	rsConfig := &config.RegistryServiceConfig{}
 	bsConfig := &config.BlockServiceConfig{}
 
 	var volumePaths ListValue
@@ -128,12 +129,8 @@ func (this *BFSServer) configure() error {
 	nsConfig.BindAddress = bindAddress
 	nsConfig.AdvertiseAddress = bindAddress
 
-	rsConfig.BindAddress = bindAddress
-	rsConfig.AdvertiseAddress = bindAddress
-
 	this.BlockServiceConfig = bsConfig
 	this.NameServiceConfig = nsConfig
-	this.RegistryServiceConfig = rsConfig
 
 	if len(this.NameServiceConfig.Path) == 0 {
 		return errors.New("--ns is required")
@@ -160,7 +157,6 @@ func (this *BFSServer) configure() error {
 
 	hostConfig.NameServiceConfig = nsConfig
 	hostConfig.BlockServiceConfig = bsConfig
-	hostConfig.RegistryServiceConfig = rsConfig
 	hostConfig.Labels = parsedLabels
 	hostConfig.Hostname = hostname
 	if hostConfig.Id == "" {
@@ -173,23 +169,6 @@ func (this *BFSServer) configure() error {
 }
 
 func (this *BFSServer) start() error {
-	// Assemble the block service
-	bsConfig := this.BlockServiceConfig
-	pvs := make([]*blockservice.PhysicalVolume, len(bsConfig.VolumeConfigs))
-
-	for i, pvConfig := range bsConfig.VolumeConfigs {
-		pvs[i] = blockservice.NewPhysicalVolume(pvConfig.Path)
-		pvs[i].Open(pvConfig.AllowAutoInitialize)
-		bsConfig.VolumeConfigs[i].Id = pvs[i].ID.String()
-	}
-
-	// Assemble the name service
-	nsConfig := this.NameServiceConfig
-	namespace := ns.New(nsConfig.Path)
-	if err := namespace.Open(); err != nil {
-		return err
-	}
-
 	etcdClient, err := clientv3.New(clientv3.Config{
 		Endpoints:        []string{"localhost:2379"},
 		DialOptions:      []grpc.DialOption{grpc.WithBlock(), grpc.WithInsecure()},
@@ -210,40 +189,39 @@ func (this *BFSServer) start() error {
 		return err
 	}
 
+	// Start keep alive process
 	go func() {
 		glog.V(2).Infof("Keep alive process starting")
 
 		for pulse := range keepAliveChan {
-			glog.V(2).Infof("Pulse: lease id: %v ttl: %d", pulse.ID, pulse.TTL)
+			glog.V(3).Infof("Pulse: lease id: %v ttl: %d", pulse.ID, pulse.TTL)
 		}
 
 		glog.V(2).Info("Keep alive process complete")
 	}()
 
-	_, err = etcdClient.Put(
-		context.Background(),
-		filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdHostsPrefix, this.HostConfig.Id),
-		proto.MarshalTextString(this.HostConfig),
-		clientv3.WithLease(hostLease.ID),
-	)
+	rpcServer := grpc.NewServer()
+
+	listener, err := net.Listen("tcp", this.NameServiceConfig.BindAddress)
 	if err != nil {
-		return err
+		fmt.Errorf("failed to bind to %s - %v", this.NameServiceConfig.BindAddress, err)
 	}
 
-	// Create the services
-	nameService := nameservice.New(namespace)
-	blockService := blockservice.New(pvs)
-	registryService := registryservice.New(etcdClient)
+	this.blockServer = blockserver.New(this.BlockServiceConfig, rpcServer)
+	this.blockServer.Start()
 
-	// Register services with the RPC server
-	server := grpc.NewServer()
-	blockservice.RegisterBlockServiceServer(server, blockService)
-	nameservice.RegisterNameServiceServer(server, nameService)
-	registryservice.RegisterRegistryServiceServer(server, registryService)
+	this.nameServer = nameserver.New(this.NameServiceConfig, rpcServer)
+	this.nameServer.Start()
 
-	listener, err := net.Listen("tcp", nsConfig.BindAddress)
+	// Register or update host config
+	_, err = etcdClient.Put(
+		context.Background(),
+		filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdHostsPrefix, registryservice.EtcdHostsConfigPrefix, this.HostConfig.Id),
+		proto.MarshalTextString(this.HostConfig),
+	)
 	if err != nil {
-		fmt.Errorf("failed to bind to %s - %v", nsConfig.BindAddress, err)
+		glog.Errorf("Unable to set or update host config - %v", err)
+		return err
 	}
 
 	// Start signal handler routine
@@ -253,35 +231,29 @@ func (this *BFSServer) start() error {
 			switch sig {
 			case os.Interrupt, syscall.SIGTERM:
 				glog.Info("Shutting down")
-				server.GracefulStop()
+				rpcServer.GracefulStop()
 			default:
 			}
 		}
 	}()
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
+	rpcQuitChan := make(chan error)
 	ticker := time.NewTicker(10 * time.Second)
-	quitChan := make(chan error)
 
+	// RPC server process
 	go func() {
-		err := server.Serve(listener)
+		err := rpcServer.Serve(listener)
 		ticker.Stop()
-		quitChan <- err
+		rpcQuitChan <- err
 	}()
-
-	_, err = registryService.RegisterHost(context.Background(), &registryservice.RegisterHostRequest{
-		HostConfig: this.HostConfig,
-	})
-	if err != nil {
-		return err
-	}
 
 	// Start health and status routine
 	go func() {
 		for t := range ticker.C {
-			volumeStats := make([]*registryservice.PhysicalVolumeStatus, 0, len(bsConfig.VolumeConfigs))
+			volumeStats := make([]*registryservice.PhysicalVolumeStatus, 0, len(this.BlockServiceConfig.VolumeConfigs))
 
-			for _, pvConfig := range bsConfig.VolumeConfigs {
+			for _, pvConfig := range this.blockServer.Config.VolumeConfigs {
 				fsStat := syscall.Statfs_t{}
 				err := syscall.Statfs(pvConfig.Path, &fsStat)
 				if err != nil {
@@ -291,14 +263,21 @@ func (this *BFSServer) start() error {
 
 				devicePath := make([]rune, 0, 1024)
 				for _, c := range fsStat.Mntfromname {
+					if c == 0x0 {
+						break
+					}
 					devicePath = append(devicePath, rune(c))
 				}
 				mountPath := make([]rune, 0, 1024)
 				for _, c := range fsStat.Mntonname {
+					if c == 0x0 {
+						break
+					}
 					mountPath = append(mountPath, rune(c))
 				}
 
 				volumeStat := &registryservice.PhysicalVolumeStatus{
+					Id:   pvConfig.Id,
 					Path: pvConfig.Path,
 					FileSystemStatus: &registryservice.FileSystemStatus{
 						MountPath:       string(mountPath),
@@ -315,31 +294,36 @@ func (this *BFSServer) start() error {
 				volumeStats = append(volumeStats, volumeStat)
 			}
 
-			_, err := registryService.HostStatus(context.Background(), &registryservice.HostStatusRequest{
-				Id:          this.HostConfig.Id,
-				VolumeStats: volumeStats,
-			})
-
+			// Register for service.
+			_, err = etcdClient.Put(
+				context.Background(),
+				filepath.Join(registryservice.DefaultEtcdPrefix, registryservice.EtcdHostsPrefix, registryservice.EtcdHostsStatusPrefix, this.HostConfig.Id),
+				proto.MarshalTextString(&registryservice.HostStatus{
+					Id:          this.HostConfig.Id,
+					FirstSeen:   0,
+					LastSeen:    t.UnixNano(),
+					VolumeStats: volumeStats,
+				}),
+				clientv3.WithLease(hostLease.ID),
+			)
 			if err != nil {
 				glog.Errorf("Unable to report host status %s - %v", t.String(), err)
 			}
 		}
 	}()
-	glog.Infof("Server running on %s - use SIGINT to stop", nsConfig.BindAddress)
+	glog.Infof("Server running on %s - use SIGINT to stop", this.NameServiceConfig.BindAddress)
 
-	err = <-quitChan
+	err = <-rpcQuitChan
 	if err != nil {
 		glog.Errorf("RPC server failed - %v", err)
 	}
 
-	if err := namespace.Close(); err != nil {
-		return err
+	if err := this.nameServer.Stop(); err != nil {
+		glog.Errorf("Stopping name server failed - %v", err)
 	}
 
-	for _, pv := range pvs {
-		if err := pv.Close(); err != nil {
-			return err
-		}
+	if err := this.blockServer.Stop(); err != nil {
+		glog.Errorf("Stopping block server failed - %v", err)
 	}
 
 	return nil
@@ -532,6 +516,56 @@ func (this *BFSClient) Run() error {
 		} else {
 			fmt.Printf("No such volume %s\n", clientArgs[1])
 		}
+	case "hosts":
+		hostConfigs := cli.Hosts()
+		hostStatus := cli.HostStatus()
+
+		for i, entry := range hostStatus {
+			fmt.Printf("Host %d: %s\n%15s: %s\n%15s: %s (%s ago)\n%15s: %s (%s ago)\n%15s:\n",
+				i+1,
+				hostConfigs[i].Hostname,
+				"id", entry.Id,
+				"first seen", time.Unix(0, entry.FirstSeen).String(),
+				time.Now().Sub(time.Unix(0, entry.FirstSeen)).Truncate(time.Millisecond).String(),
+				"last seen", time.Unix(0, entry.LastSeen).String(),
+				time.Now().Sub(time.Unix(0, entry.LastSeen)).Truncate(time.Millisecond).String(),
+				"volumes",
+			)
+
+			for j, volumeStats := range entry.VolumeStats {
+				bytesTotal := size.Bytes(float64(
+					volumeStats.FileSystemStatus.Blocks *
+						uint64(volumeStats.FileSystemStatus.BlockSize),
+				))
+				bytesFree := size.Bytes(float64(
+					volumeStats.FileSystemStatus.BlocksFree *
+						uint64(volumeStats.FileSystemStatus.BlockSize),
+				))
+
+				fmt.Printf(
+					"%18d: %s - path: %s fs: %.2fGB of %.02fGB (%.2f%%) free %.03fm of %.03fm files (%.2f%%) free %s at %s\n",
+					j+1,
+					volumeStats.Id,
+					volumeStats.Path,
+					bytesFree.ToGigabytes(),
+					bytesTotal.ToGigabytes(),
+					100* (float64(volumeStats.FileSystemStatus.BlocksFree) /
+						float64(volumeStats.FileSystemStatus.Blocks)),
+					float64(volumeStats.FileSystemStatus.FilesFree)/1000000,
+					float64(volumeStats.FileSystemStatus.Files)/1000000,
+					100* (float64(volumeStats.FileSystemStatus.FilesFree) /
+						float64(volumeStats.FileSystemStatus.Files)),
+					volumeStats.FileSystemStatus.DevicePath,
+					volumeStats.FileSystemStatus.MountPath,
+				)
+			}
+
+			fmt.Printf("%15s:\n", "labels")
+			for _, label := range hostConfigs[i].Labels {
+				fmt.Printf("%18s: %s\n", label.Key, label.Value)
+			}
+			fmt.Println()
+		}
 	default:
 		return fmt.Errorf("unknown command %s", clientArgs[0])
 	}
@@ -566,184 +600,3 @@ func main() {
 		os.Exit(1)
 	}
 }
-
-/*
-func runClient(config *Config) {
-	conn, err := grpc.Dial(config.BindAddress, grpc.WithInsecure(), grpc.WithBlock())
-	if err != nil {
-		glog.Errorf("Failed to connect to server %s - %v", config.BindAddress, err)
-	}
-	defer conn.Close()
-
-	nameClient := nameservice.NewNameServiceClient(conn)
-	blockClient := blockservice.NewBlockServiceClient(conn)
-	registryClient := registryservice.NewRegistryServiceClient(conn)
-
-	switch config.ExtraArgs[0] {
-	case "rm":
-		for _, path := range config.ExtraArgs[1:] {
-			_, err := nameClient.Delete(context.Background(), &nameservice.DeleteRequest{Path: path})
-			if err != nil {
-				glog.Errorf("%s failed - %v", config.ExtraArgs[0], err)
-				return
-			}
-		}
-	case "mv":
-		_, err := nameClient.Rename(context.Background(), &nameservice.RenameRequest{
-			SourcePath:      config.ExtraArgs[1],
-			DestinationPath: config.ExtraArgs[2],
-		})
-		if err != nil {
-			glog.Errorf("%s failed - %v", config.ExtraArgs[0], err)
-			return
-		}
-	case "stat":
-		resp, err := nameClient.Get(context.Background(), &nameservice.GetRequest{Path: config.ExtraArgs[1]})
-		if err != nil {
-			glog.Errorf("%s failed - %v", config.ExtraArgs[0], err)
-			return
-		}
-
-		fmt.Printf("%s %d (%d blocks, %d replica(s), %d block size)\n",
-			resp.Entry.Path,
-			resp.Entry.Size,
-			len(resp.Entry.Blocks),
-			resp.Entry.ReplicationLevel,
-			resp.Entry.BlockSize,
-		)
-
-		for i, block := range resp.Entry.Blocks {
-			fmt.Printf("  %3d: block: %s pv: %s\n", i, block.BlockId, block.PvId)
-		}
-	case "put":
-		reader, err := os.Open(config.ExtraArgs[1])
-		if err != nil {
-			glog.Errorf("Unable to open %s - %v", config.ExtraArgs[1], err)
-			return
-		}
-		defer reader.Close()
-
-		// FIXME
-		writer, err := file.NewWriter(nameClient, blockClient, nil, config.ExtraArgs[2], config.BlockSize)
-		if err != nil {
-			glog.Errorf("Unable to open writer %s - %v", config.ExtraArgs[2], err)
-			return
-		}
-		defer writer.Close()
-
-		written, err := io.Copy(writer, reader)
-		if err != nil {
-			glog.Errorf("Failed to copy %s to %s - %v", config.ExtraArgs[1], config.ExtraArgs[2], err)
-			return
-		}
-
-		glog.Infof("Copied %d bytes", written)
-	case "get":
-		reader := file.NewReader(nameClient, blockClient, config.ExtraArgs[1])
-		if err := reader.Open(); err != nil {
-			glog.Errorf("Failed to open file reader - %v", err)
-			return
-		}
-		defer reader.Close()
-
-		writer, err := os.Create(config.ExtraArgs[2])
-		if err != nil {
-			glog.Errorf("Unable to open %s for write - %v", config.ExtraArgs[2], err)
-			return
-		}
-		defer writer.Close()
-
-		written, err := io.Copy(writer, reader)
-		if err != nil {
-			glog.Errorf("Unable to copy file - %v", err)
-			return
-		}
-
-		glog.Infof("Copied %d bytes", written)
-	case "ls":
-		stream, err := nameClient.List(context.Background(), &nameservice.ListRequest{
-			StartKey: config.ExtraArgs[1],
-			EndKey:   config.ExtraArgs[2],
-		})
-		if err != nil {
-			glog.Errorf("%s failed - %v", config.ExtraArgs[0], err)
-			return
-		}
-		defer stream.CloseSend()
-
-		for {
-			resp, err := stream.Recv()
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				glog.Errorf("%s failed - %v", config.ExtraArgs[0], err)
-				return
-			}
-
-			for _, entry := range resp.Entries {
-				fmt.Printf("%s %d %d %d\n", entry.Path, entry.Size, entry.BlockSize, len(entry.Blocks))
-			}
-		}
-	case "hosts":
-		var sel string
-		if len(config.ExtraArgs) == 2 {
-			sel = config.ExtraArgs[1]
-		}
-
-		resp, err := registryClient.Hosts(context.Background(), &registryservice.HostsRequest{Selector: sel})
-		if err != nil {
-			glog.Errorf("%s failed - %v", config.ExtraArgs[0], err)
-			return
-		}
-
-		for i, entry := range resp.Hosts {
-			fmt.Printf("Host %d: %s\n%15s: %s\n%15s: %s (%s ago)\n%15s: %s (%s ago)\n%15s:\n",
-				i+1,
-				resp.HostConfigs[i].Hostname,
-				"id", entry.Id,
-				"first seen", time.Unix(0, entry.FirstSeen).String(),
-				time.Now().Sub(time.Unix(0, entry.FirstSeen)).Truncate(time.Millisecond).String(),
-				"last seen", time.Unix(0, entry.LastSeen).String(),
-				time.Now().Sub(time.Unix(0, entry.LastSeen)).Truncate(time.Millisecond).String(),
-				"volumes",
-			)
-
-			for j, volumeStats := range entry.VolumeStats {
-				bytesTotal := size.Bytes(float64(
-					resp.Hosts[i].VolumeStats[j].FileSystemStatus.Blocks *
-						uint64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.BlockSize),
-				))
-				bytesFree := size.Bytes(float64(
-					resp.Hosts[i].VolumeStats[j].FileSystemStatus.BlocksFree *
-						uint64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.BlockSize),
-				))
-
-				fmt.Printf(
-					"%18d: %s - path: %s fs: %.2fGB of %.02fGB (%.2f%%) free %.03fm of %.03fm files (%.2f%%) free %s at %s\n",
-					j+1,
-					volumeStats.Id,
-					resp.Hosts[i].VolumeStats[j].Path,
-					bytesFree.ToGigabytes(),
-					bytesTotal.ToGigabytes(),
-					100* (float64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.BlocksFree) /
-						float64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.Blocks)),
-					float64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.FilesFree)/1000000,
-					float64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.Files)/1000000,
-					100* (float64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.FilesFree) /
-						float64(resp.Hosts[i].VolumeStats[j].FileSystemStatus.Files)),
-					resp.Hosts[i].VolumeStats[j].FileSystemStatus.DevicePath,
-					resp.Hosts[i].VolumeStats[j].FileSystemStatus.MountPath,
-				)
-			}
-
-			fmt.Printf("%15s:\n", "labels")
-			for _, label := range resp.HostConfigs[i].Labels {
-				fmt.Printf("%18s: %s\n", label.Key, label.Value)
-			}
-			fmt.Println()
-		}
-	default:
-		glog.Errorf("Unknown command %s", config.ExtraArgs[0])
-	}
-}
-*/
