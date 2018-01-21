@@ -72,7 +72,10 @@ check: compile
 	$(GO) test $(TEST_ARGS) $(PACKAGES) $(TEST_EXTRA_ARGS)
 
 benchmark: compile
-	$(GO) test $(TEST_ARGS) $(PACKAGES) -bench . -benchmem -run ^$$ $(TEST_EXTRA_ARGS)
+	mkdir -p benchmarks
+	sh -c 'bench_file_name="benchmarks/$$(date +%Y%m%d-%H%M%S).txt"; \
+		$(GO) test $(TEST_ARGS) $(PACKAGES) -bench . -benchmem -run ^$$ $(TEST_EXTRA_ARGS) | tee $$bench_file_name'
+	find benchmarks/ -type f -a \! -name latest_change.txt -print | sort -r | head -n 2 | xargs benchcmp -changed | tee benchmarks/latest_change.txt
 
 generate: generate-proto
 
