@@ -39,18 +39,8 @@ message DeleteResponse {
   Status status = 2;
 }
 
-message VolumeRequest {
-
-}
-
-message VolumeResponse {
-  repeated string volumeIds = 1;
-}
-
 service BlockService {
   rpc Read (ReadRequest) returns (stream ReadResponse);
   rpc Write (stream WriteRequest) returns (WriteResponse);
   rpc Delete (ReadRequest) returns (DeleteResponse);
-
-  rpc Volumes(VolumeRequest) returns (VolumeResponse);
 }
