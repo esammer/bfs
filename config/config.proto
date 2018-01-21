@@ -40,11 +40,6 @@ message NameServiceConfig {
   string path = 3;
 }
 
-message RegistryServiceConfig {
-  string bindAddress = 1;
-  string advertiseAddress = 2;
-}
-
 message PhysicalVolumeConfig {
   string id = 1;
   string path = 2;
@@ -63,7 +58,6 @@ message HostConfig {
   string hostname = 2;
   BlockServiceConfig blockServiceConfig = 3;
   NameServiceConfig nameServiceConfig = 4;
-  RegistryServiceConfig registryServiceConfig = 5;
   repeated Label labels = 6;
 }
 
