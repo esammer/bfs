@@ -37,43 +37,43 @@ func Petabytes(size float64) Size {
 	return Size(size * PB)
 }
 
-func (this *Size) ToBytes() float64 {
-	return float64(*this)
+func (this Size) ToBytes() float64 {
+	return float64(this)
 }
 
-func (this *Size) ToKilobytes() float64 {
-	return float64(*this) / KB
+func (this Size) ToKilobytes() float64 {
+	return float64(this) / KB
 }
 
-func (this *Size) ToMegabytes() float64 {
-	return float64(*this) / MB
+func (this Size) ToMegabytes() float64 {
+	return float64(this) / MB
 }
 
-func (this *Size) ToGigabytes() float64 {
-	return float64(*this) / GB
+func (this Size) ToGigabytes() float64 {
+	return float64(this) / GB
 }
 
-func (this *Size) ToTerabytes() float64 {
-	return float64(*this) / TB
+func (this Size) ToTerabytes() float64 {
+	return float64(this) / TB
 }
 
-func (this *Size) ToPetabytes() float64 {
-	return float64(*this) / PB
+func (this Size) ToPetabytes() float64 {
+	return float64(this) / PB
 }
 
-func (this *Size) String() string {
+func (this Size) String() string {
 	switch {
-	case float64(*this) >= PB:
+	case float64(this) >= PB:
 		return fmt.Sprint(this.ToPetabytes()) + "PB"
-	case float64(*this) >= TB:
+	case float64(this) >= TB:
 		return fmt.Sprint(this.ToTerabytes()) + "TB"
-	case float64(*this) >= GB:
+	case float64(this) >= GB:
 		return fmt.Sprint(this.ToGigabytes()) + "GB"
-	case float64(*this) >= MB:
+	case float64(this) >= MB:
 		return fmt.Sprint(this.ToMegabytes()) + "MB"
-	case float64(*this) >= KB:
+	case float64(this) >= KB:
 		return fmt.Sprint(this.ToKilobytes()) + "KB"
 	default:
-		return fmt.Sprint(*this) + "B"
+		return fmt.Sprint(this) + "B"
 	}
 }
