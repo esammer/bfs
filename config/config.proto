@@ -44,13 +44,13 @@ message PhysicalVolumeConfig {
   string id = 1;
   string path = 2;
   bool allowAutoInitialize = 3;
-  repeated Label labels = 4;
+  map<string, string> labels = 4;
 }
 
 message LogicalVolumeConfig {
   string id = 1;
   repeated string pvIds = 2;
-  repeated Label labels = 3;
+  map<string, string> labels = 3;
 }
 
 message HostConfig {
@@ -58,10 +58,5 @@ message HostConfig {
   string hostname = 2;
   BlockServiceConfig blockServiceConfig = 3;
   NameServiceConfig nameServiceConfig = 4;
-  repeated Label labels = 6;
-}
-
-message Label {
-  string key = 1;
-  string value = 2;
+  map<string, string> labels = 5;
 }

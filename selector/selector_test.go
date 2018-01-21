@@ -1,7 +1,6 @@
 package selector
 
 import (
-	"bfs/config"
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
@@ -15,32 +14,32 @@ func TestSelector(t *testing.T) {
 	}
 
 	require.True(t,
-		selector.Evaluate([]*config.Label{
-			{Key: "c", Value: "3"},
-			{Key: "b"},
-			{Key: "a", Value: "1"},
+		selector.Evaluate(map[string]string{
+			"c": "3",
+			"b": "",
+			"a": "1",
 		}),
 	)
 }
 
 func TestSelector_Parse(t *testing.T) {
-	testExpression(t, "a = 1", []*config.Label{{Key: "a", Value: "1"}})
-	testExpression(t, "!a = 1", []*config.Label{{Key: "a", Value: "2"}})
-	testExpression(t, "a != 1", []*config.Label{{Key: "a", Value: "2"}})
-	testExpression(t, "a == 1", []*config.Label{{Key: "a", Value: "1"}})
-	testExpression(t, "a", []*config.Label{{Key: "a"}})
-	testExpression(t, "a", []*config.Label{{Key: "a", Value: "1"}})
-	testExpression(t, "!a", []*config.Label{{Key: "b"}})
-	testExpression(t, "!!a", []*config.Label{{Key: "a"}})
-	testExpression(t, "a in (1, 2, 3)", []*config.Label{{Key: "a", Value: "3"}})
-	testExpression(t, "!a in (1, 2, 3)", []*config.Label{{Key: "b", Value: "2"}})
-	testExpression(t, "a notin (1, 2, 3)", []*config.Label{{Key: "b", Value: "2"}})
-	testExpression(t, "a = 1, b = 2", []*config.Label{{Key: "a", Value: "1"}, {Key: "b", Value: "2"}})
-	testExpression(t, "a = 1, !b", []*config.Label{{Key: "a", Value: "1"}, {Key: "b", Value: "2"}})
-	testExpression(t, "a = 1, !b in (2, 3", []*config.Label{{Key: "a", Value: "1"}, {Key: "b", Value: "2"}})
+	testExpression(t, "a = 1", map[string]string{"a": "1"})
+	testExpression(t, "!a = 1", map[string]string{"a": "2"})
+	testExpression(t, "a != 1", map[string]string{"a": "2"})
+	testExpression(t, "a == 1", map[string]string{"a": "1"})
+	testExpression(t, "a", map[string]string{"a": ""})
+	testExpression(t, "a", map[string]string{"a": "1"})
+	testExpression(t, "!a", map[string]string{"b": ""})
+	testExpression(t, "!!a", map[string]string{"a": ""})
+	testExpression(t, "a in (1, 2, 3)", map[string]string{"a": "3"})
+	testExpression(t, "!a in (1, 2, 3)", map[string]string{"b": "2"})
+	testExpression(t, "a notin (1, 2, 3)", map[string]string{"b": "2"})
+	testExpression(t, "a = 1, b = 2", map[string]string{"a": "1", "b": "2"})
+	testExpression(t, "a = 1, !b", map[string]string{"a": "1", "b": "2"})
+	testExpression(t, "a = 1, !b in (2, 3", map[string]string{"a": "1", "b": "2"})
 }
 
-func testExpression(t *testing.T, expression string, labels []*config.Label) {
+func testExpression(t *testing.T, expression string, labels map[string]string) {
 	t.Run(strings.Join([]string{expression, fmt.Sprint(labels)}, "_"), func(t *testing.T) {
 		defer glog.Flush()
 		selector, err := ParseSelector(expression)

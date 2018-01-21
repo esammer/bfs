@@ -1,24 +1,20 @@
 package selector
 
 import (
-	"bfs/config"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
 
 func TestAndPredicate(t *testing.T) {
-	labelA := &config.Label{
-		Key:   "a",
-		Value: "1",
-	}
-	labelB := &config.Label{
-		Key: "b",
+	labels := map[string]string{
+		"a": "1",
+		"b": "",
 	}
 
 	t.Run("EmptyPredicates", func(t *testing.T) {
 		selector := &AndPredicate{}
-		require.True(t, selector.Evaluate(labelA))
-		require.True(t, selector.Evaluate(labelB))
+		require.True(t, selector.Evaluate("a", labels["a"]))
+		require.True(t, selector.Evaluate("b", labels["b"]))
 	})
 
 	t.Run("NoMatch", func(t *testing.T) {
@@ -28,8 +24,8 @@ func TestAndPredicate(t *testing.T) {
 			},
 		}
 
-		require.False(t, selector.Evaluate(labelA))
-		require.False(t, selector.Evaluate(labelB))
+		require.False(t, selector.Evaluate("a", labels["a"]))
+		require.False(t, selector.Evaluate("b", labels["b"]))
 	})
 
 	t.Run("OneMatch", func(t *testing.T) {
@@ -40,8 +36,8 @@ func TestAndPredicate(t *testing.T) {
 			},
 		}
 
-		require.False(t, predicate.Evaluate(labelA))
-		require.False(t, predicate.Evaluate(labelB))
+		require.False(t, predicate.Evaluate("a", labels["a"]))
+		require.False(t, predicate.Evaluate("b", labels["b"]))
 	})
 
 	t.Run("Match", func(t *testing.T) {
@@ -52,7 +48,7 @@ func TestAndPredicate(t *testing.T) {
 			},
 		}
 
-		require.True(t, predicate.Evaluate(labelA))
-		require.False(t, predicate.Evaluate(labelB))
+		require.True(t, predicate.Evaluate("a", labels["a"]))
+		require.False(t, predicate.Evaluate("b", labels["b"]))
 	})
 }

@@ -123,19 +123,12 @@ func (this *Client) startVolumeUpdater() error {
 			glog.Warningf("Unable to deserialize host config from %s - %v", string(kv.Key), err)
 			continue
 		} else {
-			var mount string
-			for _, label := range lvConfig.Labels {
-				if label.Key == "mount" {
-					mount = label.Value
-				}
-			}
-
-			if mount == "" {
+			if mountValue, ok := lvConfig.Labels["mount"]; !ok {
 				glog.Warningf("Volume %s has no mount label", lvConfig.Id)
 				continue
+			} else {
+				this.volumeConfigs[mountValue] = lvConfig
 			}
-
-			this.volumeConfigs[mount] = lvConfig
 		}
 	}
 
@@ -162,24 +155,20 @@ func (this *Client) startVolumeUpdater() error {
 					continue
 				}
 
-				var mount string
-				for _, label := range lvConfig.Labels {
-					if label.Key == "mount" {
-						mount = label.Value
-						break
-					}
-				}
-
-				if mount == "" {
+				var mountValue string
+				if val, ok := lvConfig.Labels["mount"]; !ok {
 					glog.Warningf("Volume %s has no mount label", lvConfig.Id)
 					continue
+				} else {
+					mountValue = val
+					this.volumeConfigs[mountValue] = lvConfig
 				}
 
 				switch event.Type {
 				case mvccpb.PUT:
-					this.volumeConfigs[mount] = lvConfig
+					this.volumeConfigs[mountValue] = lvConfig
 				case mvccpb.DELETE:
-					delete(this.volumeConfigs, mount)
+					delete(this.volumeConfigs, mountValue)
 				default:
 					glog.Warningf("Unknown event type %v received in volume watcher", event.Type)
 				}

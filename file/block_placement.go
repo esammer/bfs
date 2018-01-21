@@ -84,13 +84,7 @@ func NewLabelAwarePlacementPolicy(volumeConfigs []*config.PhysicalVolumeConfig, 
 	ringIndex := make(map[string]*ring.Ring, 16)
 
 	for _, pvConfig := range volumeConfigs {
-		labelValue := ""
-		for _, label := range pvConfig.Labels {
-			if label.Key == this.LabelName {
-				labelValue = label.Value
-				break
-			}
-		}
+		labelValue := pvConfig.Labels[this.LabelName]
 
 		if labelValue == "" && !this.AllowMissing {
 			continue

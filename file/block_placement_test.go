@@ -29,7 +29,7 @@ func TestLabelAwarePlacementPolicy(t *testing.T) {
 		for disk := 1; disk <= disks; disk++ {
 			pvConfigs = append(pvConfigs, &config.PhysicalVolumeConfig{
 				Id:     fmt.Sprintf("%s%d", hostname, disk),
-				Labels: []*config.Label{{Key: "hostname", Value: hostname}},
+				Labels: map[string]string{"hostname": hostname},
 			})
 		}
 	}

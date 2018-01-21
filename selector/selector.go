@@ -1,7 +1,6 @@
 package selector
 
 import (
-	"bfs/config"
 	"container/list"
 	"fmt"
 	"github.com/golang/glog"
@@ -10,7 +9,7 @@ import (
 )
 
 type Predicate interface {
-	Evaluate(label *config.Label) bool
+	Evaluate(key string, value string) bool
 }
 
 type Selector struct {
@@ -144,18 +143,18 @@ func ParseSelector(expression string) (*Selector, error) {
 	return &Selector{Expression: expression, Predicates: predicates}, nil
 }
 
-func (this *Selector) Evaluate(labels []*config.Label) bool {
+func (this *Selector) Evaluate(labels map[string]string) bool {
 	glog.V(2).Infof("Evaluate expression: %s against labels: %v", this.Expression, labels)
 
 	for _, predicate := range this.Predicates {
 		matches := 0
 
-		for _, label := range labels {
-			if predicate.Evaluate(label) {
-				glog.V(2).Infof("Matched label: %v", label)
+		for key, value := range labels {
+			if predicate.Evaluate(key, value) {
+				glog.V(2).Infof("Matched label: %s %s", key, value)
 				matches++
 			} else {
-				glog.V(2).Infof("No match for label: %v", label)
+				glog.V(2).Infof("No match for label: %s %s", key, value)
 			}
 		}
 

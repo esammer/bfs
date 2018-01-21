@@ -98,18 +98,15 @@ func (this *BFSServer) configure() error {
 
 	for _, pathSpec := range volumePaths {
 		components := strings.Split(pathSpec, ":")
-		var labels []*config.Label
+		var labels map[string]string
 
 		if len(components) > 1 {
 			labelStrs := strings.Split(components[1], ",")
-			labels = make([]*config.Label, 0, len(labelStrs))
+			labels = make(map[string]string, len(labelStrs))
 
 			for _, labelStr := range labelStrs {
 				labelComponents := strings.Split(labelStr, "=")
-				labels = append(labels, &config.Label{
-					Key:   labelComponents[0],
-					Value: labelComponents[1],
-				})
+				labels[labelComponents[0]] = labelComponents[1]
 			}
 		}
 
@@ -139,14 +136,10 @@ func (this *BFSServer) configure() error {
 		return errors.New("at least one --volume is required")
 	}
 
-	parsedLabels := make([]*config.Label, len(hostLabels))
-	for i, label := range hostLabels {
+	parsedLabels := make(map[string]string, len(hostLabels))
+	for _, label := range hostLabels {
 		components := strings.Split(label, "=")
-
-		parsedLabels[i] = &config.Label{
-			Key:   components[0],
-			Value: components[1],
-		}
+		parsedLabels[components[0]] = components[1]
 	}
 
 	hostname, err := os.Hostname()
@@ -473,8 +466,8 @@ func (this *BFSClient) Run() error {
 
 		for _, lvConfig := range lvs {
 			fmt.Printf("Logical volume: %s %s\n", lvConfig.Id, strings.Join(lvConfig.PvIds, ", "))
-			for _, label := range lvConfig.Labels {
-				fmt.Printf("%15s = %s\n", label.Key, label.Value)
+			for key, value := range lvConfig.Labels {
+				fmt.Printf("%15s = %s\n", key, value)
 			}
 		}
 	case "lvcreate":
@@ -483,11 +476,11 @@ func (this *BFSClient) Run() error {
 		}
 
 		labelPairs := strings.Split(clientArgs[3], ",")
-		labels := make([]*config.Label, len(labelPairs))
+		labels := make(map[string]string, len(labelPairs))
 
-		for i, labelPair := range labelPairs {
+		for _, labelPair := range labelPairs {
 			components := strings.Split(labelPair, "=")
-			labels[i] = &config.Label{Key: components[0], Value: components[1]}
+			labels[components[0]] = components[1]
 		}
 
 		err := cli.CreateLogicalVolume(&config.LogicalVolumeConfig{
@@ -560,8 +553,8 @@ func (this *BFSClient) Run() error {
 			}
 
 			fmt.Printf("%15s:\n", "labels")
-			for _, label := range hostConfigs[i].Labels {
-				fmt.Printf("%18s: %s\n", label.Key, label.Value)
+			for key, value := range hostConfigs[i].Labels {
+				fmt.Printf("%18s: %s\n", key, value)
 			}
 			fmt.Println()
 		}

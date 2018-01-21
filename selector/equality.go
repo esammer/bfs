@@ -1,7 +1,6 @@
 package selector
 
 import (
-	"bfs/config"
 	"github.com/golang/glog"
 )
 
@@ -10,11 +9,11 @@ type EqualsPredicate struct {
 	Value string
 }
 
-func (this *EqualsPredicate) Evaluate(label *config.Label) bool {
-	glog.V(2).Infof("Evaluate equality expression: %s %#v against label: %v", this.Key, this.Value, label)
+func (this *EqualsPredicate) Evaluate(key string, value string) bool {
+	glog.V(2).Infof("Evaluate equality expression: %s %#v against label: %s %s", this.Key, this.Value, key, value)
 
-	if this.Key == label.Key {
-		if this.Value == "" || this.Value == label.Value {
+	if this.Key == key {
+		if this.Value == "" || this.Value == value {
 			return true
 		}
 	}
