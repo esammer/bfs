@@ -376,47 +376,7 @@ func (this *Client) Create(path string, blockSize int) (file.Writer, error) {
 		false,
 		3,
 		1,
-		func(node *file.ValueNode) bool {
-			// A host must be:
-			//
-			// 1. Known to the system.
-			id, ok := this.hostNameIdIndex[node.LabelValue]
-			glog.V(2).Infof("Found host id: %s for label: %s", id, node.LabelValue)
-			if !ok {
-				glog.V(2).Infof("No configuration for host %s", node.LabelValue)
-				return false
-			}
-
-			// 2. Alive and healthy.
-			hostStatus, ok := this.hostStatus[id]
-			glog.V(2).Infof("Found host status: %v for id: %s", hostStatus, id)
-			if !ok {
-				glog.V(2).Infof("No status for host %s", node.LabelValue)
-				return false
-			}
-
-			for _, volumeStatus := range hostStatus.VolumeStats {
-				// 3. Have status info on the pvId in question.
-				if volumeStatus.Id == node.Value.Id {
-					glog.V(2).Infof("Found pv id: %s for id: %s", volumeStatus.Id, node.Value.Id)
-
-					fsStats := volumeStatus.FileSystemStatus
-					bytesAvailable := fsStats.BlocksAvailable * uint64(fsStats.BlockSize)
-
-					// 4. Have enough space available.
-					gbAvail := size.Bytes(float64(bytesAvailable)).ToGigabytes()
-					if gbAvail >= 10 {
-						glog.V(2).Infof("Found enough space %.03fGB on %s", gbAvail, volumeStatus.Id)
-						return true
-					}
-
-					glog.V(2).Infof("Not enough space %.03f on PV %s on host %s", gbAvail, node.Value.Id, node.LabelValue)
-				}
-			}
-
-			glog.V(2).Infof("No PV %s on host %s", node.Value.Id, node.LabelValue)
-			return false
-		},
+		this.blockAcceptFunc,
 	)
 
 	return file.NewWriter(conn.nameClient, conn.blockClient, placementPolicy, path, blockSize)
@@ -635,4 +595,46 @@ func (this *Client) connectionForPath(path string) (*serviceClient, string, erro
 	}
 
 	return obj.(*serviceClient), hostId, nil
+}
+
+func (this *Client) blockAcceptFunc(node *file.ValueNode) bool {
+	// A host must be:
+	//
+	// 1. Known to the system.
+	id, ok := this.hostNameIdIndex[node.LabelValue]
+	glog.V(2).Infof("Found host id: %s for label: %s", id, node.LabelValue)
+	if !ok {
+		glog.V(2).Infof("No configuration for host %s", node.LabelValue)
+		return false
+	}
+
+	// 2. Alive and healthy.
+	hostStatus, ok := this.hostStatus[id]
+	glog.V(2).Infof("Found host status: %v for id: %s", hostStatus, id)
+	if !ok {
+		glog.V(2).Infof("No status for host %s", node.LabelValue)
+		return false
+	}
+
+	for _, volumeStatus := range hostStatus.VolumeStats {
+		// 3. Have status info on the pvId in question.
+		if volumeStatus.Id == node.Value.Id {
+			glog.V(2).Infof("Found pv id: %s for id: %s", volumeStatus.Id, node.Value.Id)
+
+			fsStats := volumeStatus.FileSystemStatus
+			bytesAvailable := fsStats.BlocksAvailable * uint64(fsStats.BlockSize)
+
+			// 4. Have enough space available.
+			gbAvail := size.Bytes(float64(bytesAvailable)).ToGigabytes()
+			if gbAvail >= 10 {
+				glog.V(2).Infof("Found enough space %.03fGB on %s", gbAvail, volumeStatus.Id)
+				return true
+			}
+
+			glog.V(2).Infof("Not enough space %.03f on PV %s on host %s", gbAvail, node.Value.Id, node.LabelValue)
+		}
+	}
+
+	glog.V(2).Infof("No PV %s on host %s", node.Value.Id, node.LabelValue)
+	return false
 }
