@@ -100,7 +100,16 @@ func TestLocalFileReader_Read(t *testing.T) {
 
 	_, err = nameClient.AddVolume(context.Background(), &nameservice.AddVolumeRequest{VolumeId: "/", PvIds: pvIds})
 
-	writer, err := NewWriter(nameClient, blockClient, pvIds, "/test.txt", size.MB)
+	placementPolicy := NewLabelAwarePlacementPolicy(
+		blockServer.Config.VolumeConfigs,
+		"hostname",
+		true,
+		1,
+		1,
+		nil,
+	)
+
+	writer, err := NewWriter(nameClient, blockClient, placementPolicy, "/test.txt", size.MB)
 	require.NoError(t, err)
 
 	_, err = writer.Write(zeroBuf)

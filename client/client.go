@@ -6,6 +6,7 @@ import (
 	"bfs/file"
 	"bfs/lru"
 	"bfs/nameservice"
+	"bfs/util/size"
 	"context"
 	"fmt"
 	"github.com/coreos/etcd/clientv3"
@@ -31,6 +32,9 @@ type Client struct {
 	hostsWatchCancel      context.CancelFunc
 	hostStatus            map[string]*config.HostStatus
 	hostStatusWatchCancel context.CancelFunc
+
+	hostNameIdIndex map[string]string
+	pvConfigIndex   map[string]*config.PhysicalVolumeConfig
 }
 
 type serviceClient struct {
@@ -53,11 +57,13 @@ func New(endpoints []string) (*Client, error) {
 
 func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 	client := &Client{
-		etcdClient:    etcdClient,
-		hostConfigs:   make(map[string]*config.HostConfig, 64),
-		hostStatus:    make(map[string]*config.HostStatus, 64),
-		volumeConfigs: make(map[string]*config.LogicalVolumeConfig, 4),
-		hash:          consistent.New(),
+		etcdClient:      etcdClient,
+		hostConfigs:     make(map[string]*config.HostConfig, 64),
+		hostStatus:      make(map[string]*config.HostStatus, 64),
+		volumeConfigs:   make(map[string]*config.LogicalVolumeConfig, 4),
+		hostNameIdIndex: make(map[string]string),
+		pvConfigIndex:   make(map[string]*config.PhysicalVolumeConfig),
+		hash:            consistent.New(),
 	}
 
 	client.hash.NumberOfReplicas = 10
@@ -216,6 +222,12 @@ func (this *Client) startHostUpdater() error {
 			} else {
 				this.hostConfigs[hostConfig.Id] = hostConfig
 				this.hash.Add(hostConfig.Id)
+
+				this.hostNameIdIndex[hostConfig.Hostname] = hostConfig.Id
+
+				for _, pvConfig := range hostConfig.BlockServiceConfig.VolumeConfigs {
+					this.pvConfigIndex[pvConfig.Id] = pvConfig
+				}
 			}
 		} else if entryType == "status" {
 			status := &config.HostStatus{}
@@ -265,9 +277,21 @@ func (this *Client) startHostUpdater() error {
 						case mvccpb.PUT:
 							this.hostConfigs[hostConfig.Id] = hostConfig
 							this.hash.Add(hostConfig.Id)
+
+							this.hostNameIdIndex[hostConfig.Hostname] = hostConfig.Id
+
+							for _, pvConfig := range hostConfig.BlockServiceConfig.VolumeConfigs {
+								this.pvConfigIndex[pvConfig.Id] = pvConfig
+							}
 						case mvccpb.DELETE:
 							delete(this.hostConfigs, hostConfig.Id)
 							this.hash.Remove(hostConfig.Id)
+
+							delete(this.hostNameIdIndex, hostConfig.Hostname)
+
+							for _, pvConfig := range hostConfig.BlockServiceConfig.VolumeConfigs {
+								delete(this.pvConfigIndex, pvConfig.Id)
+							}
 						default:
 							glog.Warningf("Unknown event type %v received in host watcher", event.Type)
 						}
@@ -317,17 +341,27 @@ func (this *Client) HostStatus() []*config.HostStatus {
 }
 
 func (this *Client) Create(path string, blockSize int) (file.Writer, error) {
-	var pvIds []string
+	var pvConfigs []*config.PhysicalVolumeConfig
 
 	for mount, lvConfig := range this.volumeConfigs {
 		glog.V(2).Infof("Checking volume mount %s for file %s", mount, path)
 		if strings.HasPrefix(path, mount) {
-			pvIds = lvConfig.PvIds
+			pvConfigs = make([]*config.PhysicalVolumeConfig, 0, len(lvConfig.PvIds))
+
+			for _, pvId := range lvConfig.PvIds {
+				if val, ok := this.pvConfigIndex[pvId]; ok {
+					glog.V(2).Infof("Adding pvConfig to lv placement policy list: %v", val)
+					pvConfigs = append(pvConfigs, val)
+				} else {
+					glog.Warningf("No physical volume configuration with ID %s", pvId)
+				}
+			}
+
 			break
 		}
 	}
 
-	if len(pvIds) == 0 {
+	if len(pvConfigs) == 0 {
 		return nil, fmt.Errorf("unable to find volume for file %s", path)
 	}
 
@@ -336,7 +370,56 @@ func (this *Client) Create(path string, blockSize int) (file.Writer, error) {
 		return nil, err
 	}
 
-	return file.NewWriter(conn.nameClient, conn.blockClient, pvIds, path, blockSize)
+	placementPolicy := file.NewLabelAwarePlacementPolicy(
+		pvConfigs,
+		"hostname",
+		false,
+		3,
+		1,
+		func(node *file.ValueNode) bool {
+			// A host must be:
+			//
+			// 1. Known to the system.
+			id, ok := this.hostNameIdIndex[node.LabelValue]
+			glog.V(2).Infof("Found host id: %s for label: %s", id, node.LabelValue)
+			if !ok {
+				glog.V(2).Infof("No configuration for host %s", node.LabelValue)
+				return false
+			}
+
+			// 2. Alive and healthy.
+			hostStatus, ok := this.hostStatus[id]
+			glog.V(2).Infof("Found host status: %v for id: %s", hostStatus, id)
+			if !ok {
+				glog.V(2).Infof("No status for host %s", node.LabelValue)
+				return false
+			}
+
+			for _, volumeStatus := range hostStatus.VolumeStats {
+				// 3. Have status info on the pvId in question.
+				if volumeStatus.Id == node.Value.Id {
+					glog.V(2).Infof("Found pv id: %s for id: %s", volumeStatus.Id, node.Value.Id)
+
+					fsStats := volumeStatus.FileSystemStatus
+					bytesAvailable := fsStats.BlocksAvailable * uint64(fsStats.BlockSize)
+
+					// 4. Have enough space available.
+					gbAvail := size.Bytes(float64(bytesAvailable)).ToGigabytes()
+					if gbAvail >= 10 {
+						glog.V(2).Infof("Found enough space %.03fGB on %s", gbAvail, volumeStatus.Id)
+						return true
+					}
+
+					glog.V(2).Infof("Not enough space %.03f on PV %s on host %s", gbAvail, node.Value.Id, node.LabelValue)
+				}
+			}
+
+			glog.V(2).Infof("No PV %s on host %s", node.Value.Id, node.LabelValue)
+			return false
+		},
+	)
+
+	return file.NewWriter(conn.nameClient, conn.blockClient, placementPolicy, path, blockSize)
 }
 
 func (this *Client) Open(path string) (file.Reader, error) {

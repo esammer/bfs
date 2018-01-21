@@ -6,7 +6,6 @@ import (
 	"context"
 	"github.com/golang/glog"
 	"io"
-	"math/rand"
 )
 
 /*
@@ -20,11 +19,11 @@ type Writer interface {
 
 type LocalFileWriter struct {
 	// Configuration
-	nameClient  nameservice.NameServiceClient
-	blockClient blockservice.BlockServiceClient
-	pvIds       []string
-	blockSize   int
-	filename    string
+	nameClient      nameservice.NameServiceClient
+	blockClient     blockservice.BlockServiceClient
+	placementPolicy BlockPlacementPolicy
+	blockSize       int
+	filename        string
 
 	// File state.
 	filePos    int
@@ -35,24 +34,22 @@ type LocalFileWriter struct {
 	writeStream blockservice.BlockService_WriteClient
 
 	// Current block writer state.
-	blockPos        int
-	selectedPvId    string
-	pvSelectionSeed int
+	blockPos     int
+	selectedPvId string
 }
 
-func NewWriter(nameClient nameservice.NameServiceClient, blockClient blockservice.BlockServiceClient, pvIds []string,
-	filename string, blockSize int) (*LocalFileWriter, error) {
+func NewWriter(nameClient nameservice.NameServiceClient, blockClient blockservice.BlockServiceClient,
+	placementPolicy BlockPlacementPolicy, filename string, blockSize int) (*LocalFileWriter, error) {
 
 	glog.V(2).Infof("Allocate writer for %v with blockSize %d", filename, blockSize)
 
 	return &LocalFileWriter{
 		nameClient:      nameClient,
 		blockClient:     blockClient,
-		pvIds:           pvIds,
+		placementPolicy: placementPolicy,
 		blockSize:       blockSize,
 		filename:        filename,
 		blockList:       make([]*nameservice.BlockMetadata, 0, 16),
-		pvSelectionSeed: rand.Int(),
 	}, nil
 }
 
@@ -82,9 +79,13 @@ func (this *LocalFileWriter) Write(buffer []byte) (int, error) {
 				this.writeStream = writeStream
 			}
 
-			this.selectedPvId = this.pvIds[(this.pvSelectionSeed+this.blockCount)%len(this.pvIds)]
-			this.blockPos = 0
-
+			//this.selectedPvId = this.pvIds[(this.pvSelectionSeed+this.blockCount)%len(this.pvIds)]
+			if pvs, err := this.placementPolicy.Next(); err != nil {
+				return totalWritten, err
+			} else {
+				this.selectedPvId = pvs[0].Id
+				this.blockPos = 0
+			}
 			glog.V(1).Infof("Allocated new block %d on %s - filePos: %d", this.blockCount, this.selectedPvId, this.filePos)
 		}
 

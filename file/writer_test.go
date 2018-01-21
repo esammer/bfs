@@ -94,14 +94,18 @@ func TestLocalFileWriter_Write(t *testing.T) {
 
 	zeroBuf := bytes.Repeat([]byte{0}, size.KB-1)
 
-	pvIds := make([]string, len(blockServer.PhysicalVolumes))
-	for i, pv := range blockServer.PhysicalVolumes {
-		pvIds[i] = pv.ID.String()
-	}
+	placementPolicy := NewLabelAwarePlacementPolicy(
+		blockServer.Config.VolumeConfigs,
+		"hostname",
+		true,
+		1,
+		1,
+		nil,
+	)
 
-	_, err = nameClient.AddVolume(context.Background(), &nameservice.AddVolumeRequest{VolumeId: "1", PvIds: pvIds})
+	//_, err = nameClient.AddVolume(context.Background(), &nameservice.AddVolumeRequest{VolumeId: "1", PvIds: pvIds})
 
-	writer, err := NewWriter(nameClient, blockClient, pvIds, "/test.txt", size.MB)
+	writer, err := NewWriter(nameClient, blockClient, placementPolicy, "/test.txt", size.MB)
 	require.NoError(t, err)
 
 	writeLen, err := writer.Write(zeroBuf)
@@ -195,6 +199,15 @@ func BenchmarkLocalFileWriter_Write(b *testing.B) {
 
 	nameClient := nameservice.NewNameServiceClient(nameConn)
 
+	placementPolicy := NewLabelAwarePlacementPolicy(
+		blockServer.Config.VolumeConfigs,
+		"hostname",
+		true,
+		1,
+		1,
+		nil,
+	)
+
 	zeroBuf := bytes.Repeat([]byte{0}, size.MB)
 	fileSizes := []size.Size{
 		size.Megabytes(1),
@@ -248,7 +261,7 @@ func BenchmarkLocalFileWriter_Write(b *testing.B) {
 								)
 
 								for i := 0; i < b.N; i++ {
-									writer, err := NewWriter(nameClient, blockClient, pvIds, "/test.txt", blockSize)
+									writer, err := NewWriter(nameClient, blockClient, placementPolicy, "/test.txt", blockSize)
 									require.NoError(b, err)
 
 									for j := 0; j < writeCount; j++ {
