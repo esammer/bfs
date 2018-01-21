@@ -1,4 +1,4 @@
-package client
+package file
 
 import (
 	"bfs/config"
@@ -123,19 +123,22 @@ func NewLabelAwarePlacementPolicy(volumeConfigs []*config.PhysicalVolumeConfig, 
 }
 
 func (this *LabelAwarePlacementPolicy) Next() ([]*config.PhysicalVolumeConfig, error) {
-	glog.V(3).Infof("Next replica set for %s (desired replicas: %d, min replicas: %d)", this.LabelName,
-		this.Replicas, this.MinimumReplicas)
+	glog.V(3).Infof("Next replica set for %s (desired replicas: %d, min replicas: %d)",
+		this.LabelName, this.Replicas, this.MinimumReplicas)
 
 	selectedPVs := make([]*config.PhysicalVolumeConfig, 0, this.MinimumReplicas)
+	selectedValues := make(map[string]bool, this.MinimumReplicas)
+
 	firstPV := ""
 
-	for i := 0; i < this.Replicas; {
+	for i := 1; i <= this.Replicas; {
 		rootNode := this.ring
 		valueNode := rootNode.Value.(*ring.Ring)
 
 		value := valueNode.Value.(*ValueNode)
 
-		glog.V(3).Infof("Potential selection: %s %v", value.LabelValue, value.Value.Id)
+		glog.V(3).Infof("Replica %d/%d potential selection: %s pv: %s",
+			i, this.Replicas, value.LabelValue, value.Value.Id)
 
 		if firstPV == "" {
 			firstPV = value.Value.Id
@@ -146,9 +149,9 @@ func (this *LabelAwarePlacementPolicy) Next() ([]*config.PhysicalVolumeConfig, e
 		}
 
 		if this.AcceptanceFunc != nil && !this.AcceptanceFunc(value) {
-			glog.V(3).Infof("Selection disallowed by accept func")
+			glog.V(3).Infof("Replica %d/%d selection disallowed by accept func", i, this.Replicas)
 
-			if valueNode.Next() == valueNode {
+			if valueNode == valueNode.Next() {
 				// Special case: If the label value only has one element in the ring, it will loop forever. Advance root.
 				if this.ring == this.ring.Next() {
 					// Special case: If the root value only has one element in the ring, it will loop forever. Give up.
@@ -160,19 +163,28 @@ func (this *LabelAwarePlacementPolicy) Next() ([]*config.PhysicalVolumeConfig, e
 				rootNode.Value = valueNode.Next()
 			}
 		} else {
-			glog.V(3).Infof("Replica %d selection: %v", i, value)
-			selectedPVs = append(selectedPVs, value.Value)
+			if _, ok := selectedValues[value.LabelValue]; !ok {
+				glog.V(3).Infof("Replica %d/%d selection: %s pv: %s",
+					i, this.Replicas, value.LabelValue, value.Value.Id)
+
+				selectedPVs = append(selectedPVs, value.Value)
+				selectedValues[value.LabelValue] = true
+				i++
+			}
 
 			rootNode.Value = valueNode.Next()
 			this.ring = rootNode.Next()
-			i++
 		}
 	}
 
 	var err error
 	if len(selectedPVs) < this.MinimumReplicas {
-		err = fmt.Errorf("too few replicas - %d found, wanted %d, minimum %d", len(selectedPVs), this.Replicas, this.MinimumReplicas)
+		err = fmt.Errorf("too few replicas - %d found, wanted %d, minimum %d",
+			len(selectedPVs), this.Replicas, this.MinimumReplicas)
 	}
+
+	glog.V(3).Infof("Selected %d/%d replicas (needed at least %d)",
+		len(selectedPVs), this.Replicas, this.MinimumReplicas)
 
 	return selectedPVs, err
 }
