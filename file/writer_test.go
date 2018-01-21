@@ -9,7 +9,6 @@ import (
 	"bfs/test"
 	"bfs/util/size"
 	"bytes"
-	"context"
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/assert"
@@ -215,14 +214,6 @@ func BenchmarkLocalFileWriter_Write(b *testing.B) {
 		size.Megabytes(128),
 		size.Megabytes(256),
 	}
-
-	pvIds := make([]string, len(blockServer.PhysicalVolumes))
-	for i, pv := range blockServer.PhysicalVolumes {
-		pvIds[i] = pv.ID.String()
-	}
-
-	_, err = nameClient.AddVolume(context.Background(), &nameservice.AddVolumeRequest{VolumeId: "1", PvIds: pvIds})
-	require.NoError(b, err)
 
 	b.ResetTimer()
 

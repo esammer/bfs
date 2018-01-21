@@ -9,7 +9,6 @@ import (
 	"bfs/test"
 	"bfs/util/size"
 	"bytes"
-	"context"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -97,8 +96,6 @@ func TestLocalFileReader_Read(t *testing.T) {
 	for i, pv := range blockServer.PhysicalVolumes {
 		pvIds[i] = pv.ID.String()
 	}
-
-	_, err = nameClient.AddVolume(context.Background(), &nameservice.AddVolumeRequest{VolumeId: "/", PvIds: pvIds})
 
 	placementPolicy := NewLabelAwarePlacementPolicy(
 		blockServer.Config.VolumeConfigs,

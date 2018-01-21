@@ -158,21 +158,3 @@ func (this *NameService) List(request *ListRequest, stream NameService_ListServe
 
 	return nil
 }
-
-func (this *NameService) VolumeInfo(ctx context.Context, request *VolumeInfoRequest) (*VolumeInfoResponse, error) {
-	pvIds, err := this.Namespace.Volume(request.VolumeId)
-	if err != nil {
-		return nil, err
-	}
-
-	return &VolumeInfoResponse{PvIds: pvIds}, nil
-}
-
-func (this *NameService) AddVolume(ctx context.Context, request *AddVolumeRequest) (*AddVolumeResponse, error) {
-	err := this.Namespace.AddVolume(request.VolumeId, request.PvIds)
-	if err != nil {
-		return nil, err
-	}
-
-	return &AddVolumeResponse{}, nil
-}

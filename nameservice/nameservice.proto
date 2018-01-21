@@ -84,7 +84,4 @@ service NameService {
   rpc Delete (DeleteRequest) returns (DeleteResponse);
   rpc Rename (RenameRequest) returns (RenameResponse);
   rpc List (ListRequest) returns (stream ListResponse);
-
-  rpc AddVolume (AddVolumeRequest) returns (AddVolumeResponse);
-  rpc VolumeInfo (VolumeInfoRequest) returns (VolumeInfoResponse);
 }
