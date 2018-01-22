@@ -544,10 +544,10 @@ func (this *Client) ListVolumes() ([]*config.LogicalVolumeConfig, error) {
 }
 
 func (this *Client) Stats() uintptr {
-	var size uintptr = 0
-	size += unsafe.Sizeof(config.HostConfig{}) * uintptr(len(this.hostConfigs))
-	size += unsafe.Sizeof(config.LogicalVolumeConfig{}) * uintptr(len(this.volumeConfigs))
-	return size
+	var byteSize uintptr = 0
+	byteSize += unsafe.Sizeof(config.HostConfig{}) * uintptr(len(this.hostConfigs))
+	byteSize += unsafe.Sizeof(config.LogicalVolumeConfig{}) * uintptr(len(this.volumeConfigs))
+	return byteSize
 }
 
 func (this *Client) Close() error {
@@ -605,7 +605,7 @@ func (this *Client) blockAcceptFunc(node *file.ValueNode) bool {
 		return false
 	}
 
-	for _, volumeStatus := range hostStatus.VolumeStats {
+	for _, volumeStatus := range hostStatus.VolumeStatus {
 		// 3. Have status info on the pvId in question.
 		if volumeStatus.Id == node.Value.Id {
 			glog.V(2).Infof("Found pv id: %s for id: %s", volumeStatus.Id, node.Value.Id)

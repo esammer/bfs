@@ -243,7 +243,7 @@ func (this *BFSServer) start() error {
 	// Start health and status routine
 	go func() {
 		for t := range ticker.C {
-			volumeStats := make([]*config.PhysicalVolumeStatus, 0, len(this.BlockServiceConfig.VolumeConfigs))
+			volumeStats := make(map[string]*config.PhysicalVolumeStatus, len(this.BlockServiceConfig.VolumeConfigs))
 
 			for _, pvConfig := range this.blockServer.Config.VolumeConfigs {
 				fsStat := syscall.Statfs_t{}
@@ -283,7 +283,7 @@ func (this *BFSServer) start() error {
 						BlocksFree:      fsStat.Bfree,
 					},
 				}
-				volumeStats = append(volumeStats, volumeStat)
+				volumeStats[pvConfig.Id] = volumeStat
 			}
 
 			// Register for service.
@@ -291,10 +291,10 @@ func (this *BFSServer) start() error {
 				context.Background(),
 				filepath.Join(client.DefaultEtcdPrefix, client.EtcdHostsPrefix, client.EtcdHostsStatusPrefix, this.HostConfig.Id),
 				proto.MarshalTextString(&config.HostStatus{
-					Id:          this.HostConfig.Id,
-					FirstSeen:   0,
-					LastSeen:    t.UnixNano(),
-					VolumeStats: volumeStats,
+					Id:           this.HostConfig.Id,
+					FirstSeen:    0,
+					LastSeen:     t.UnixNano(),
+					VolumeStatus: volumeStats,
 				}),
 				clientv3.WithLease(hostLease.ID),
 			)
@@ -524,7 +524,7 @@ func (this *BFSClient) Run() error {
 				"volumes",
 			)
 
-			for j, volumeStats := range entry.VolumeStats {
+			for pvId, volumeStats := range entry.VolumeStatus {
 				bytesTotal := size.Bytes(float64(
 					volumeStats.FileSystemStatus.Blocks *
 						uint64(volumeStats.FileSystemStatus.BlockSize),
@@ -535,8 +535,8 @@ func (this *BFSClient) Run() error {
 				))
 
 				fmt.Printf(
-					"%18d: %s - path: %s fs: %.2fGB of %.02fGB (%.2f%%) free %.03fm of %.03fm files (%.2f%%) free %s at %s\n",
-					j+1,
+					"%18s: %s - path: %s fs: %.2fGB of %.02fGB (%.2f%%) free %.03fm of %.03fm files (%.2f%%) free %s at %s\n",
+					pvId,
 					volumeStats.Id,
 					volumeStats.Path,
 					bytesFree.ToGigabytes(),

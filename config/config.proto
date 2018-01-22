@@ -48,7 +48,7 @@ message HostStatus {
   string id = 1;
   int64 firstSeen = 2;
   int64 lastSeen = 3;
-  repeated PhysicalVolumeStatus volumeStats = 4;
+  map<string, PhysicalVolumeStatus> volumeStatus = 4;
 }
 
 message PhysicalVolumeStatus {

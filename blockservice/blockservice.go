@@ -81,13 +81,13 @@ func (this *BlockService) Write(stream BlockService_WriteServer) error {
 			len(request.Buffer),
 		)
 
-		size, err := writer.Write(request.Buffer)
+		writeLen, err := writer.Write(request.Buffer)
 		if err != nil {
 			glog.Errorf("Write failed - %v", err)
 			return err
 		}
 
-		totalWritten += size
+		totalWritten += writeLen
 	}
 
 	if writer != nil {
