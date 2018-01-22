@@ -38,6 +38,10 @@ PROTO_FILES = \
 	config/config.pb.go \
 	nameservice/nameservice.pb.go
 
+ifdef v
+VERBOSE = -v
+endif
+
 .PHONY: all benchmark check clean compile deps format generate generate-proto help realclean vet
 
 all: compile check
@@ -64,18 +68,18 @@ help:
 	fi
 
 deps:
-	$(DEP) ensure
+	$(DEP) ensure $(VERBOSE)
 
 compile: deps generate-proto
-	$(GO) install -v
+	$(GO) install $(VERBOSE)
 
 check: compile
-	$(GO) test $(TEST_ARGS) $(PACKAGES) $(TEST_EXTRA_ARGS)
+	$(GO) test $(VERBOSE) $(TEST_ARGS) $(PACKAGES) $(TEST_EXTRA_ARGS)
 
 benchmark: compile
 	mkdir -p benchmarks
 	sh -c 'bench_file_name="benchmarks/$$(date +%Y%m%d-%H%M%S).txt"; \
-		$(GO) test $(TEST_ARGS) $(PACKAGES) -bench . -benchmem -run ^$$ $(TEST_EXTRA_ARGS) | tee $$bench_file_name'
+		$(GO) test $(VERBOSE) $(TEST_ARGS) $(PACKAGES) -bench . -benchmem -run ^$$ $(TEST_EXTRA_ARGS) | tee $$bench_file_name'
 	find benchmarks/ -type f -a \! -name latest_change.txt -print | sort -r | head -n 2 | xargs benchcmp -changed | tee benchmarks/latest_change.txt
 
 generate: generate-proto
@@ -98,7 +102,7 @@ format:
 	$(GO) fmt $(PACKAGES)
 
 vet:
-	$(GO) vet -v $(PACKAGES)
+	$(GO) vet $(VERBOSE) $(PACKAGES)
 
 %.pb.go: %.proto
 	protoc $< --go_out=plugins=grpc:..
