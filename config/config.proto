@@ -4,29 +4,16 @@ package config;
 
 option go_package = "bfs/config";
 
-message HostStatus {
-  string id = 1;
-  int64 firstSeen = 4;
-  int64 lastSeen = 5;
-  repeated PhysicalVolumeStatus volumeStats = 6;
-}
+/*
+ * Configuration objects.
+ */
 
-message FileSystemStatus {
-  string devicePath = 1;
-  string mountPath = 2;
-  uint32 blockSize = 3;
-  uint64 blocks = 4;
-  uint64 blocksFree = 5;
-  uint64 blocksAvailable = 6;
-  uint64 files = 7;
-  uint64 filesFree = 8;
-  int32 ioSize = 9;
-}
-
-message PhysicalVolumeStatus {
+message HostConfig {
   string id = 1;
-  string path = 2;
-  FileSystemStatus fileSystemStatus = 3;
+  string hostname = 2;
+  BlockServiceConfig blockServiceConfig = 3;
+  NameServiceConfig nameServiceConfig = 4;
+  map<string, string> labels = 5;
 }
 
 message BlockServiceConfig {
@@ -53,10 +40,31 @@ message LogicalVolumeConfig {
   map<string, string> labels = 3;
 }
 
-message HostConfig {
+/*
+ * Status objects.
+ */
+
+message HostStatus {
   string id = 1;
-  string hostname = 2;
-  BlockServiceConfig blockServiceConfig = 3;
-  NameServiceConfig nameServiceConfig = 4;
-  map<string, string> labels = 5;
+  int64 firstSeen = 2;
+  int64 lastSeen = 3;
+  repeated PhysicalVolumeStatus volumeStats = 4;
+}
+
+message PhysicalVolumeStatus {
+  string id = 1;
+  string path = 2;
+  FileSystemStatus fileSystemStatus = 3;
+}
+
+message FileSystemStatus {
+  string devicePath = 1;
+  string mountPath = 2;
+  uint32 blockSize = 3;
+  uint64 blocks = 4;
+  uint64 blocksFree = 5;
+  uint64 blocksAvailable = 6;
+  uint64 files = 7;
+  uint64 filesFree = 8;
+  int32 ioSize = 9;
 }
