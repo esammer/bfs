@@ -196,7 +196,7 @@ func (this *BFSServer) start() error {
 
 	listener, err := net.Listen("tcp", this.NameServiceConfig.BindAddress)
 	if err != nil {
-		fmt.Errorf("failed to bind to %s - %v", this.NameServiceConfig.BindAddress, err)
+		return fmt.Errorf("failed to bind to %s - %v", this.NameServiceConfig.BindAddress, err)
 	}
 
 	this.blockServer = blockserver.New(this.BlockServiceConfig, rpcServer)

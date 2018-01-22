@@ -74,6 +74,6 @@ func (this Size) String() string {
 	case float64(this) >= KB:
 		return fmt.Sprint(this.ToKilobytes()) + "KB"
 	default:
-		return fmt.Sprint(this) + "B"
+		return fmt.Sprint(float64(this)) + "B"
 	}
 }

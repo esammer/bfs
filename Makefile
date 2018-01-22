@@ -38,7 +38,7 @@ PROTO_FILES = \
 	config/config.pb.go \
 	nameservice/nameservice.pb.go
 
-.PHONY: all benchmark check clean compile deps format generate generate-proto help realclean
+.PHONY: all benchmark check clean compile deps format generate generate-proto help realclean vet
 
 all: compile check
 
@@ -57,6 +57,7 @@ help:
 	    deps      ensure/build required dependencies.\n\
 	    format    run $(GO) fmt on all source.\n\
 	    generate  generate required source files.\n\
+	    vet       run $(GO) vet on all source.\n\
 	"
 	@if test -z "$(GOPATH)"; then \
 		echo "***WARNING*** GOPATH is not set!"; \
@@ -95,6 +96,9 @@ realclean: clean
 
 format:
 	$(GO) fmt $(PACKAGES)
+
+vet:
+	$(GO) vet -v $(PACKAGES)
 
 %.pb.go: %.proto
 	protoc $< --go_out=plugins=grpc:..
