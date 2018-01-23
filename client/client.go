@@ -26,12 +26,12 @@ type Client struct {
 	clientLRU  *lru.LRUCache
 	hash       *consistent.Consistent
 
-	volumeConfigs         map[string]*config.LogicalVolumeConfig
-	volumesWatchCancel    context.CancelFunc
-	hostConfigs           map[string]*config.HostConfig
-	hostsWatchCancel      context.CancelFunc
-	hostStatus            map[string]*config.HostStatus
-	hostStatusWatchCancel context.CancelFunc
+	volumeConfigs map[string]*config.LogicalVolumeConfig
+	hostConfigs   map[string]*config.HostConfig
+	hostStatus    map[string]*config.HostStatus
+
+	volumeWatcher *Watcher
+	hostWatcher   *Watcher
 
 	hostNameIdIndex map[string]string
 	pvConfigIndex   map[string]*config.PhysicalVolumeConfig
@@ -68,11 +68,163 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 
 	client.hash.NumberOfReplicas = 10
 
-	if err := client.startVolumeUpdater(); err != nil {
+	// FIXME: Extract these deserializers into top level private functions.
+	volumeConfigDeser := func(kv *mvccpb.KeyValue) *config.LogicalVolumeConfig {
+		lvConfig := &config.LogicalVolumeConfig{}
+
+		if err := proto.UnmarshalText(string(kv.Value), lvConfig); err != nil {
+			glog.Warningf("Unable to deserialize host config from %s - %v", string(kv.Key), err)
+		} else {
+			if _, ok := lvConfig.Labels["mount"]; !ok {
+				glog.Warningf("Volume %s has no mount label", lvConfig.Id)
+			} else {
+				return lvConfig
+			}
+		}
+
+		return nil
+	}
+	hostConfigDeser := func(kv *mvccpb.KeyValue) *config.HostConfig {
+		hostConfig := &config.HostConfig{}
+
+		if err := proto.UnmarshalText(string(kv.Value), hostConfig); err != nil {
+			glog.Warningf("Unable to deserialize host config from %s - %v", string(kv.Key), err)
+			return nil
+		}
+
+		return hostConfig
+	}
+	hostStatusDeser := func(kv *mvccpb.KeyValue) *config.HostStatus {
+		hostStatus := &config.HostStatus{}
+
+		if err := proto.UnmarshalText(string(kv.Value), hostStatus); err != nil {
+			glog.Warningf("Unable to deserialize host status from %s - %v", string(kv.Key), err)
+			return nil
+		}
+
+		return hostStatus
+	}
+
+	client.volumeWatcher = NewWatcher(
+		etcdClient,
+		filepath.Join(DefaultEtcdPrefix, EtcdVolumesPrefix),
+		true,
+		func(kv *mvccpb.KeyValue) error {
+			glog.V(2).Infof("Found volume: %s", string(kv.Key))
+
+			lvConfig := volumeConfigDeser(kv)
+
+			if lvConfig != nil {
+				if val, ok := lvConfig.Labels["mount"]; ok {
+					client.volumeConfigs[val] = lvConfig
+				}
+			}
+
+			return nil
+		},
+		func(kv *mvccpb.KeyValue) error {
+			lvConfig := volumeConfigDeser(kv)
+
+			if lvConfig != nil {
+				if val, ok := lvConfig.Labels["mount"]; ok {
+					delete(client.volumeConfigs, val)
+				}
+			}
+
+			return nil
+		},
+		nil,
+		true,
+		clientv3.WithPrefix(),
+	)
+
+	client.hostWatcher = NewWatcher(
+		etcdClient,
+		filepath.Join(DefaultEtcdPrefix, EtcdHostsPrefix),
+		true,
+		func(kv *mvccpb.KeyValue) error {
+			glog.V(2).Infof("Found host %s", string(kv.Key))
+
+			pathComponents := strings.Split(string(kv.Key), string(filepath.Separator))
+			if len(pathComponents) < 4 {
+				glog.Warningf("Host key entry %s (components: %v) is of the wrong format - skipping", string(kv.Key), pathComponents)
+				return nil
+			}
+
+			entryType := pathComponents[len(pathComponents)-2]
+
+			if entryType == "config" {
+				hostConfig := hostConfigDeser(kv)
+
+				if hostConfig == nil {
+					glog.Warningf("Unable to deserialize host config from %s", string(kv.Key))
+					return nil
+				} else {
+					client.hostConfigs[hostConfig.Id] = hostConfig
+					client.hash.Add(hostConfig.Id)
+
+					client.hostNameIdIndex[hostConfig.Hostname] = hostConfig.Id
+
+					for _, pvConfig := range hostConfig.BlockServiceConfig.VolumeConfigs {
+						client.pvConfigIndex[pvConfig.Id] = pvConfig
+					}
+				}
+			} else if entryType == "status" {
+				status := hostStatusDeser(kv)
+
+				if status == nil {
+					glog.Warningf("Unable to deserialize host status from %s", string(kv.Key))
+					return nil
+				} else {
+					client.hostStatus[status.Id] = status
+				}
+			}
+
+			return nil
+		},
+		func(kv *mvccpb.KeyValue) error {
+			pathComponents := strings.Split(string(kv.Key), string(filepath.Separator))
+			if len(pathComponents) < 4 {
+				glog.Warningf("Host key entry %s (components: %v) is of the wrong format - skipping", string(kv.Key), pathComponents)
+				return nil
+			}
+
+			entryType := pathComponents[len(pathComponents)-2]
+
+			if entryType == "config" {
+				hostConfig := hostConfigDeser(kv)
+
+				if hostConfig != nil {
+					glog.Warningf("Unable to deserialize host config from %s", string(kv.Key))
+					return nil
+				}
+
+				delete(client.hostConfigs, hostConfig.Id)
+				client.hash.Remove(hostConfig.Id)
+
+				delete(client.hostNameIdIndex, hostConfig.Hostname)
+
+				for _, pvConfig := range hostConfig.BlockServiceConfig.VolumeConfigs {
+					delete(client.pvConfigIndex, pvConfig.Id)
+				}
+			} else if entryType == "status" {
+				status := hostStatusDeser(kv)
+
+				delete(client.hostStatus, status.Id)
+			}
+
+			return nil
+		},
+		nil,
+		true,
+		clientv3.WithPrefix(),
+	)
+
+	if err := client.volumeWatcher.Start(); err != nil {
 		return nil, err
 	}
 
-	if err := client.startHostUpdater(); err != nil {
+	if err := client.hostWatcher.Start(); err != nil {
 		return nil, err
 	}
 
@@ -102,213 +254,6 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 	)
 
 	return client, nil
-}
-
-func (this *Client) startVolumeUpdater() error {
-	volumesResp, err := this.etcdClient.Get(
-		context.Background(),
-		filepath.Join(DefaultEtcdPrefix, EtcdVolumesPrefix),
-		clientv3.WithPrefix(),
-	)
-	if err != nil {
-		return err
-	}
-
-	for _, kv := range volumesResp.Kvs {
-		glog.V(2).Infof("Found volume: %s", string(kv.Key))
-
-		lvConfig := &config.LogicalVolumeConfig{}
-
-		if err := proto.UnmarshalText(string(kv.Value), lvConfig); err != nil {
-			glog.Warningf("Unable to deserialize host config from %s - %v", string(kv.Key), err)
-			continue
-		} else {
-			if mountValue, ok := lvConfig.Labels["mount"]; !ok {
-				glog.Warningf("Volume %s has no mount label", lvConfig.Id)
-				continue
-			} else {
-				this.volumeConfigs[mountValue] = lvConfig
-			}
-		}
-	}
-
-	ctx, volumesWatchCancel := context.WithCancel(context.Background())
-	this.volumesWatchCancel = volumesWatchCancel
-
-	go func() {
-		glog.V(2).Infof("Volume watcher process starting")
-
-		volumesWatchChan := this.etcdClient.Watch(
-			ctx,
-			filepath.Join(DefaultEtcdPrefix, EtcdVolumesPrefix),
-			clientv3.WithPrefix(),
-			clientv3.WithRev(volumesResp.Header.Revision),
-		)
-
-		for watchEvent := range volumesWatchChan {
-			for _, event := range watchEvent.Events {
-				glog.V(2).Infof("Update to volume %s - %v", string(event.Kv.Key), event.Type)
-
-				lvConfig := &config.LogicalVolumeConfig{}
-				if err := proto.UnmarshalText(string(event.Kv.Value), lvConfig); err != nil {
-					glog.Warningf("Unable to deserialize volume config from %s - %v", string(event.Kv.Key), err)
-					continue
-				}
-
-				var mountValue string
-				if val, ok := lvConfig.Labels["mount"]; !ok {
-					glog.Warningf("Volume %s has no mount label", lvConfig.Id)
-					continue
-				} else {
-					mountValue = val
-					this.volumeConfigs[mountValue] = lvConfig
-				}
-
-				switch event.Type {
-				case mvccpb.PUT:
-					this.volumeConfigs[mountValue] = lvConfig
-				case mvccpb.DELETE:
-					delete(this.volumeConfigs, mountValue)
-				default:
-					glog.Warningf("Unknown event type %v received in volume watcher", event.Type)
-				}
-			}
-		}
-
-		glog.V(2).Infof("Volume watcher process complete")
-	}()
-
-	return nil
-}
-
-func (this *Client) startHostUpdater() error {
-	hostResp, err := this.etcdClient.Get(
-		context.Background(),
-		filepath.Join(DefaultEtcdPrefix, EtcdHostsPrefix),
-		clientv3.WithPrefix(),
-	)
-	if err != nil {
-		return err
-	}
-
-	for _, kv := range hostResp.Kvs {
-		glog.V(2).Infof("Found host %s", string(kv.Key))
-
-		pathComponents := strings.Split(string(kv.Key), string(filepath.Separator))
-		if len(pathComponents) < 4 {
-			glog.Warningf("Host key entry %s (components: %v) is of the wrong format - skipping", string(kv.Key), pathComponents)
-			continue
-		}
-
-		entryType := pathComponents[len(pathComponents)-2]
-
-		if entryType == "config" {
-			hostConfig := &config.HostConfig{}
-
-			if err := proto.UnmarshalText(string(kv.Value), hostConfig); err != nil {
-				glog.Warningf("Unable to deserialize host config from %s - %v", string(kv.Key), err)
-				continue
-			} else {
-				this.hostConfigs[hostConfig.Id] = hostConfig
-				this.hash.Add(hostConfig.Id)
-
-				this.hostNameIdIndex[hostConfig.Hostname] = hostConfig.Id
-
-				for _, pvConfig := range hostConfig.BlockServiceConfig.VolumeConfigs {
-					this.pvConfigIndex[pvConfig.Id] = pvConfig
-				}
-			}
-		} else if entryType == "status" {
-			status := &config.HostStatus{}
-
-			if err := proto.UnmarshalText(string(kv.Value), status); err != nil {
-				glog.Warningf("Unable to deserialize host status from %s - %v", string(kv.Key), err)
-				continue
-			} else {
-				this.hostStatus[status.Id] = status
-			}
-		}
-	}
-
-	ctx, hostWatchCancel := context.WithCancel(context.Background())
-	this.hostsWatchCancel = hostWatchCancel
-
-	go func() {
-		glog.V(2).Infof("Hosts watcher process starting")
-
-		hostsWatchChan := this.etcdClient.Watch(
-			ctx,
-			filepath.Join(DefaultEtcdPrefix, EtcdHostsPrefix, EtcdHostsConfigPrefix),
-			clientv3.WithPrefix(),
-			clientv3.WithRev(hostResp.Header.Revision),
-		)
-
-		for watchEvent := range hostsWatchChan {
-			for _, event := range watchEvent.Events {
-				glog.V(2).Infof("Update to host %s - %v", string(event.Kv.Key), event.Type)
-
-				pathComponents := filepath.SplitList(string(event.Kv.Key))
-				if len(pathComponents) < 4 {
-					glog.Warning("Host key entry %s is of the wrong format - skipping", string(event.Kv.Key))
-					continue
-				}
-
-				entryType := pathComponents[len(pathComponents)-2]
-
-				if entryType == "config" {
-					hostConfig := &config.HostConfig{}
-
-					if err := proto.UnmarshalText(string(event.Kv.Value), hostConfig); err != nil {
-						glog.Warningf("Unable to deserialize host config from %s - %v", string(event.Kv.Key), err)
-						continue
-					} else {
-						switch event.Type {
-						case mvccpb.PUT:
-							this.hostConfigs[hostConfig.Id] = hostConfig
-							this.hash.Add(hostConfig.Id)
-
-							this.hostNameIdIndex[hostConfig.Hostname] = hostConfig.Id
-
-							for _, pvConfig := range hostConfig.BlockServiceConfig.VolumeConfigs {
-								this.pvConfigIndex[pvConfig.Id] = pvConfig
-							}
-						case mvccpb.DELETE:
-							delete(this.hostConfigs, hostConfig.Id)
-							this.hash.Remove(hostConfig.Id)
-
-							delete(this.hostNameIdIndex, hostConfig.Hostname)
-
-							for _, pvConfig := range hostConfig.BlockServiceConfig.VolumeConfigs {
-								delete(this.pvConfigIndex, pvConfig.Id)
-							}
-						default:
-							glog.Warningf("Unknown event type %v received in host watcher", event.Type)
-						}
-					}
-				} else if entryType == "status" {
-					status := &config.HostStatus{}
-
-					if err := proto.UnmarshalText(string(event.Kv.Value), status); err != nil {
-						glog.Warningf("Unable to deserialize host status from %s - %v", string(event.Kv.Key), err)
-						continue
-					} else {
-						switch event.Type {
-						case mvccpb.PUT:
-							this.hostStatus[status.Id] = status
-						case mvccpb.DELETE:
-							delete(this.hostStatus, status.Id)
-						default:
-							glog.Warningf("Unknown event type %v received in host watcher", event.Type)
-						}
-					}
-				}
-			}
-		}
-
-		glog.V(2).Infof("Hosts watcher process complete")
-	}()
-
-	return nil
 }
 
 func (this *Client) Hosts() []*config.HostConfig {
@@ -555,12 +500,12 @@ func (this *Client) Close() error {
 		this.clientLRU.Purge()
 	}
 
-	if this.volumesWatchCancel != nil {
-		this.volumesWatchCancel()
+	if this.volumeWatcher != nil {
+		this.volumeWatcher.Stop()
 	}
 
-	if this.hostsWatchCancel != nil {
-		this.hostsWatchCancel()
+	if this.hostWatcher != nil {
+		this.hostWatcher.Stop()
 	}
 
 	if this.etcdClient != nil {
