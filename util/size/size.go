@@ -64,16 +64,16 @@ func (this Size) ToPetabytes() float64 {
 func (this Size) String() string {
 	switch {
 	case float64(this) >= PB:
-		return fmt.Sprint(this.ToPetabytes()) + "PB"
+		return fmt.Sprintf("%.2f", this.ToPetabytes()) + "PB"
 	case float64(this) >= TB:
-		return fmt.Sprint(this.ToTerabytes()) + "TB"
+		return fmt.Sprintf("%.2f", this.ToTerabytes()) + "TB"
 	case float64(this) >= GB:
-		return fmt.Sprint(this.ToGigabytes()) + "GB"
+		return fmt.Sprintf("%.2f", this.ToGigabytes()) + "GB"
 	case float64(this) >= MB:
-		return fmt.Sprint(this.ToMegabytes()) + "MB"
+		return fmt.Sprintf("%.2f", this.ToMegabytes()) + "MB"
 	case float64(this) >= KB:
-		return fmt.Sprint(this.ToKilobytes()) + "KB"
+		return fmt.Sprintf("%.2f", this.ToKilobytes()) + "KB"
 	default:
-		return fmt.Sprint(float64(this)) + "B"
+		return fmt.Sprintf("%.2f", this.ToBytes()) + "B"
 	}
 }

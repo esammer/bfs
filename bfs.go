@@ -336,6 +336,9 @@ func (this *BFSClient) Run() error {
 		clientFlags.Var(f.Value, f.Name, f.Usage)
 	})
 
+	lsFlags := flag.NewFlagSet("ls", flag.ContinueOnError)
+	humanNumbers := lsFlags.Bool("H", false, "use human-friendly numbers")
+
 	clientFlags.Parse(os.Args[2:])
 
 	flag.Parse()
@@ -351,6 +354,10 @@ func (this *BFSClient) Run() error {
 		startKey := ""
 		endKey := ""
 
+		if err := lsFlags.Parse(clientArgs[1:]); err != nil {
+			return err
+		}
+
 		if len(clientArgs) > 1 {
 			startKey = clientArgs[1]
 		}
@@ -360,9 +367,17 @@ func (this *BFSClient) Run() error {
 
 		resultChan := cli.List(startKey, endKey)
 		for entry := range resultChan {
+			var sizeStr string
+
+			if *humanNumbers {
+				sizeStr = size.Bytes(float64(entry.Size)).String()
+			} else {
+				sizeStr = fmt.Sprint(entry.Size)
+			}
+
 			fmt.Printf("%s %s %d %s %s\n",
 				entry.Path,
-				entry.Size,
+				sizeStr,
 				len(entry.Blocks),
 				time.Unix(entry.Ctime.Seconds, entry.Ctime.Nanos).UTC().String(),
 				time.Unix(entry.Mtime.Seconds, entry.Mtime.Nanos).UTC().String(),
