@@ -360,7 +360,13 @@ func (this *BFSClient) Run() error {
 
 		resultChan := cli.List(startKey, endKey)
 		for entry := range resultChan {
-			fmt.Printf("%s %d %d\n", entry.Path, entry.Size, len(entry.Blocks))
+			fmt.Printf("%s %s %d %s %s\n",
+				entry.Path,
+				entry.Size,
+				len(entry.Blocks),
+				time.Unix(entry.Ctime.Seconds, entry.Ctime.Nanos).UTC().String(),
+				time.Unix(entry.Mtime.Seconds, entry.Mtime.Nanos).UTC().String(),
+			)
 		}
 	case "put":
 		if len(clientArgs) != 3 {
@@ -424,12 +430,14 @@ func (this *BFSClient) Run() error {
 			return err
 		}
 
-		fmt.Printf("%s %d (%d blocks, %d replica(s), %d block size)\n",
+		fmt.Printf("%s %d (blocks: %d, replicas: %d, block-size: %d, created: %s, modified: %s)\n",
 			entry.Path,
 			entry.Size,
 			len(entry.Blocks),
 			entry.ReplicationLevel,
 			entry.BlockSize,
+			time.Unix(entry.Ctime.Seconds, entry.Ctime.Nanos).UTC().String(),
+			time.Unix(entry.Mtime.Seconds, entry.Mtime.Nanos).UTC().String(),
 		)
 
 		for i, block := range entry.Blocks {

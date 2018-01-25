@@ -6,6 +6,7 @@ import (
 	"context"
 	"github.com/golang/glog"
 	"io"
+	"time"
 )
 
 /*
@@ -163,6 +164,9 @@ func (this *LocalFileWriter) Close() error {
 		return err
 	}
 
+	now := time.Now().UTC()
+	nowTime := &nameservice.Time{Seconds: now.Unix(), Nanos: int64(now.Nanosecond())}
+
 	_, err := this.nameClient.Add(context.Background(), &nameservice.AddRequest{
 		Entry: &nameservice.Entry{
 			Path:             this.filename,
@@ -172,6 +176,8 @@ func (this *LocalFileWriter) Close() error {
 			ReplicationLevel: 1,
 			BlockSize:        uint64(this.blockSize),
 			Size:             uint64(this.filePos),
+			Ctime:            nowTime,
+			Mtime:            nowTime,
 		},
 	})
 	if err != nil {

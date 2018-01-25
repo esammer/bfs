@@ -4,6 +4,7 @@ import (
 	"bfs/ns"
 	"context"
 	"io"
+	"time"
 )
 
 const (
@@ -46,6 +47,8 @@ func (this *NameService) Get(ctx context.Context, request *GetRequest) (*GetResp
 			BlockSize:        entry.BlockSize,
 			ReplicationLevel: entry.ReplicationLevel,
 			Size:             entry.Size,
+			Ctime:            &Time{entry.Ctime.Unix(), int64(entry.Ctime.Nanosecond())},
+			Mtime:            &Time{entry.Mtime.Unix(), int64(entry.Mtime.Nanosecond())},
 		},
 	}, nil
 }
@@ -70,6 +73,8 @@ func (this *NameService) Add(ctx context.Context, request *AddRequest) (*AddResp
 		BlockSize:        request.Entry.BlockSize,
 		Size:             request.Entry.Size,
 		ReplicationLevel: request.Entry.ReplicationLevel,
+		Ctime:            time.Unix(request.Entry.Ctime.Seconds, request.Entry.Ctime.Nanos).UTC(),
+		Mtime:            time.Unix(request.Entry.Mtime.Seconds, request.Entry.Mtime.Nanos).UTC(),
 	}
 
 	if err := this.Namespace.Add(entry); err != nil {
@@ -147,6 +152,8 @@ func (this *NameService) List(request *ListRequest, stream NameService_ListServe
 			LvId:             entry.VolumeName,
 			Permissions:      uint32(entry.Permissions),
 			Blocks:           blocks,
+			Ctime:            &Time{Seconds: entry.Ctime.Unix(), Nanos: int64(entry.Ctime.Nanosecond())},
+			Mtime:            &Time{Seconds: entry.Mtime.Unix(), Nanos: int64(entry.Mtime.Nanosecond())},
 		})
 
 		return true, nil

@@ -10,6 +10,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"io"
+	"time"
 )
 
 type FileStatus uint8
@@ -41,6 +42,8 @@ type Entry struct {
 	BlockSize        uint64
 	Size             uint64
 	ReplicationLevel uint32
+	Ctime            time.Time
+	Mtime            time.Time
 }
 
 type BlockMetadata struct {

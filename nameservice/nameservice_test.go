@@ -12,6 +12,7 @@ import (
 	"net"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestNameService(t *testing.T) {
@@ -57,7 +58,7 @@ func TestNameService(t *testing.T) {
 
 		for i := 0; i < 10; i++ {
 			wg.Add(1)
-
+			now := time.Now()
 			go func(i int) {
 				addResp, err := serviceClient.Add(context.Background(), &AddRequest{
 					Entry: &Entry{
@@ -68,6 +69,8 @@ func TestNameService(t *testing.T) {
 							{PvId: "a", BlockId: "1"},
 							{PvId: "a", BlockId: "2"},
 						},
+						Ctime: &Time{Seconds: now.Unix(), Nanos: int64(now.Nanosecond())},
+						Mtime: &Time{Seconds: now.Unix(), Nanos: int64(now.Nanosecond())},
 					},
 				})
 				assert.NoError(t, err)

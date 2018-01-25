@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestNamespace_Open(t *testing.T) {
@@ -153,6 +154,7 @@ func BenchmarkNamespace(b *testing.B) {
 
 	b.Run("Add", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
+			now := time.Now()
 			err = ns.Add(
 				&Entry{
 					VolumeName:       "/",
@@ -175,6 +177,8 @@ func BenchmarkNamespace(b *testing.B) {
 						{Block: "9", LVName: "/", PVID: "1"},
 						{Block: "10", LVName: "/", PVID: "1"},
 					},
+					Ctime: now,
+					Mtime: now,
 				},
 			)
 			require.NoError(b, err)
@@ -189,6 +193,7 @@ func BenchmarkNamespace(b *testing.B) {
 	b.Run("List", func(b *testing.B) {
 		b.StopTimer()
 		for i := 0; i < 1000; i++ {
+			now := time.Now()
 			err = ns.Add(
 				&Entry{
 					VolumeName:       "/",
@@ -211,6 +216,8 @@ func BenchmarkNamespace(b *testing.B) {
 						{Block: "9", LVName: "/", PVID: "1"},
 						{Block: "10", LVName: "/", PVID: "1"},
 					},
+					Ctime: now,
+					Mtime: now,
 				},
 			)
 			require.NoError(b, err)
@@ -226,6 +233,7 @@ func BenchmarkNamespace(b *testing.B) {
 	b.Run("Get", func(b *testing.B) {
 		b.StopTimer()
 		for i := 0; i < 1000; i++ {
+			now := time.Now()
 			err = ns.Add(
 				&Entry{
 					VolumeName:       "/",
@@ -248,6 +256,8 @@ func BenchmarkNamespace(b *testing.B) {
 						{Block: "9", LVName: "/", PVID: "1"},
 						{Block: "10", LVName: "/", PVID: "1"},
 					},
+					Ctime: now,
+					Mtime: now,
 				},
 			)
 			require.NoError(b, err)
@@ -261,6 +271,7 @@ func BenchmarkNamespace(b *testing.B) {
 	})
 	b.Run("Rename", func(b *testing.B) {
 		b.StopTimer()
+		now := time.Now()
 		err = ns.Add(
 			&Entry{
 				VolumeName:       "/",
@@ -283,6 +294,8 @@ func BenchmarkNamespace(b *testing.B) {
 					{Block: "9", LVName: "/", PVID: "1"},
 					{Block: "10", LVName: "/", PVID: "1"},
 				},
+				Ctime: now,
+				Mtime: now,
 			},
 		)
 		require.NoError(b, err)

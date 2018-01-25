@@ -13,6 +13,7 @@ import (
 	"net"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestNameServer(t *testing.T) {
@@ -48,6 +49,9 @@ func TestNameServer(t *testing.T) {
 
 	nsClient := nameservice.NewNameServiceClient(conn)
 
+	now := time.Now()
+	nowTime := &nameservice.Time{Seconds: now.Unix(), Nanos: int64(now.Nanosecond())}
+
 	_, err = nsClient.Add(
 		context.Background(),
 		&nameservice.AddRequest{
@@ -63,6 +67,8 @@ func TestNameServer(t *testing.T) {
 					{PvId: "pv1", BlockId: "b3"},
 					{PvId: "pv2", BlockId: "b4"},
 				},
+				Ctime: nowTime,
+				Mtime: nowTime,
 			},
 		},
 	)
