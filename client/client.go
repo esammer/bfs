@@ -26,15 +26,10 @@ type Client struct {
 	clientLRU  *lru.LRUCache
 	hash       *consistent.Consistent
 
-	volumeConfigs map[string]*config.LogicalVolumeConfig
-	hostConfigs   map[string]*config.HostConfig
-	hostStatus    map[string]*config.HostStatus
+	clusterState *ClusterState
 
 	volumeWatcher *Watcher
 	hostWatcher   *Watcher
-
-	hostNameIdIndex map[string]string
-	pvConfigIndex   map[string]*config.PhysicalVolumeConfig
 }
 
 type serviceClient struct {
@@ -57,13 +52,9 @@ func New(endpoints []string) (*Client, error) {
 
 func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 	client := &Client{
-		etcdClient:      etcdClient,
-		hostConfigs:     make(map[string]*config.HostConfig, 64),
-		hostStatus:      make(map[string]*config.HostStatus, 64),
-		volumeConfigs:   make(map[string]*config.LogicalVolumeConfig, 4),
-		hostNameIdIndex: make(map[string]string),
-		pvConfigIndex:   make(map[string]*config.PhysicalVolumeConfig),
-		hash:            consistent.New(),
+		etcdClient:   etcdClient,
+		clusterState: NewClusterState(),
+		hash:         consistent.New(),
 	}
 
 	client.hash.NumberOfReplicas = 10
@@ -115,8 +106,8 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 			lvConfig := volumeConfigDeser(kv)
 
 			if lvConfig != nil {
-				if val, ok := lvConfig.Labels["mount"]; ok {
-					client.volumeConfigs[val] = lvConfig
+				if _, ok := lvConfig.Labels["mount"]; ok {
+					client.clusterState.AddLogicalVolumeConfig(lvConfig)
 				}
 			}
 
@@ -125,11 +116,7 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 		func(kv *mvccpb.KeyValue) error {
 			lvConfig := volumeConfigDeser(kv)
 
-			if lvConfig != nil {
-				if val, ok := lvConfig.Labels["mount"]; ok {
-					delete(client.volumeConfigs, val)
-				}
-			}
+			client.clusterState.RemoveLogicalVolumeConfig(lvConfig.Id)
 
 			return nil
 		},
@@ -160,14 +147,8 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 					glog.Warningf("Unable to deserialize host config from %s", string(kv.Key))
 					return nil
 				} else {
-					client.hostConfigs[hostConfig.Id] = hostConfig
+					client.clusterState.AddHostConfig(hostConfig)
 					client.hash.Add(hostConfig.Id)
-
-					client.hostNameIdIndex[hostConfig.Hostname] = hostConfig.Id
-
-					for _, pvConfig := range hostConfig.BlockServiceConfig.VolumeConfigs {
-						client.pvConfigIndex[pvConfig.Id] = pvConfig
-					}
 				}
 			} else if entryType == "status" {
 				status := hostStatusDeser(kv)
@@ -176,7 +157,7 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 					glog.Warningf("Unable to deserialize host status from %s", string(kv.Key))
 					return nil
 				} else {
-					client.hostStatus[status.Id] = status
+					client.clusterState.AddHostStatus(status)
 				}
 			}
 
@@ -199,18 +180,12 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 					return nil
 				}
 
-				delete(client.hostConfigs, hostConfig.Id)
+				client.clusterState.RemoveHostConfig(hostConfig.Id)
 				client.hash.Remove(hostConfig.Id)
-
-				delete(client.hostNameIdIndex, hostConfig.Hostname)
-
-				for _, pvConfig := range hostConfig.BlockServiceConfig.VolumeConfigs {
-					delete(client.pvConfigIndex, pvConfig.Id)
-				}
 			} else if entryType == "status" {
 				status := hostStatusDeser(kv)
 
-				delete(client.hostStatus, status.Id)
+				client.clusterState.RemoveHostStatus(status.Id)
 			}
 
 			return nil
@@ -257,40 +232,22 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 }
 
 func (this *Client) Hosts() []*config.HostConfig {
-	hostConfigs := make([]*config.HostConfig, 0, len(this.hostConfigs))
-	for _, v := range this.hostConfigs {
-		hostConfigs = append(hostConfigs, v)
-	}
-
-	return hostConfigs
+	return this.clusterState.HostConfigs()
 }
 
 func (this *Client) HostStatus() []*config.HostStatus {
-	hostStatus := make([]*config.HostStatus, 0, len(this.hostStatus))
-	for _, v := range this.hostStatus {
-		hostStatus = append(hostStatus, v)
-	}
-
-	return hostStatus
+	return this.clusterState.HostStatus()
 }
 
 func (this *Client) Create(path string, blockSize int) (file.Writer, error) {
 	var pvConfigs []*config.PhysicalVolumeConfig
 
-	for mount, lvConfig := range this.volumeConfigs {
+	for _, lvConfig := range this.clusterState.LogicalVolumeConfigs() {
+		mount := lvConfig.Labels["mount"]
+
 		glog.V(2).Infof("Checking volume mount %s for file %s", mount, path)
 		if strings.HasPrefix(path, mount) {
-			pvConfigs = make([]*config.PhysicalVolumeConfig, 0, len(lvConfig.PvIds))
-
-			for _, pvId := range lvConfig.PvIds {
-				if val, ok := this.pvConfigIndex[pvId]; ok {
-					glog.V(2).Infof("Adding pvConfig to lv placement policy list: %v", val)
-					pvConfigs = append(pvConfigs, val)
-				} else {
-					glog.Warningf("No physical volume configuration with ID %s", pvId)
-				}
-			}
-
+			pvConfigs = this.clusterState.PhysicalVolumesForLogicalVolume(lvConfig.Id)
 			break
 		}
 	}
@@ -401,7 +358,7 @@ func (this *Client) List(startKey string, endKey string) <-chan *nameservice.Ent
 	iterChan := make(chan *nameservice.Entry, 1024)
 
 	go func() {
-		for _, hostConfig := range this.hostConfigs {
+		for _, hostConfig := range this.clusterState.HostConfigs() {
 			glog.V(2).Infof("List on %s", hostConfig.Hostname)
 
 			o, err := this.clientLRU.Get(hostConfig.NameServiceConfig.AdvertiseAddress)
@@ -490,8 +447,8 @@ func (this *Client) ListVolumes() ([]*config.LogicalVolumeConfig, error) {
 
 func (this *Client) Stats() uintptr {
 	var byteSize uintptr = 0
-	byteSize += unsafe.Sizeof(config.HostConfig{}) * uintptr(len(this.hostConfigs))
-	byteSize += unsafe.Sizeof(config.LogicalVolumeConfig{}) * uintptr(len(this.volumeConfigs))
+	byteSize += unsafe.Sizeof(config.HostConfig{}) * uintptr(len(this.clusterState.HostConfigs()))
+	byteSize += unsafe.Sizeof(config.LogicalVolumeConfig{}) * uintptr(len(this.clusterState.LogicalVolumeConfigs()))
 	return byteSize
 }
 
@@ -523,7 +480,7 @@ func (this *Client) connectionForPath(path string) (*serviceClient, string, erro
 		return nil, "", err
 	}
 
-	obj, err := this.clientLRU.Get(this.hostConfigs[hostId].NameServiceConfig.AdvertiseAddress)
+	obj, err := this.clientLRU.Get(this.clusterState.HostConfig(hostId).NameServiceConfig.AdvertiseAddress)
 	if err != nil {
 		return nil, "", err
 	}
@@ -535,17 +492,17 @@ func (this *Client) blockAcceptFunc(node *file.ValueNode) bool {
 	// A host must be:
 	//
 	// 1. Known to the system.
-	id, ok := this.hostNameIdIndex[node.LabelValue]
+	id := this.clusterState.HostId(node.LabelValue)
 	glog.V(2).Infof("Found host id: %s for label: %s", id, node.LabelValue)
-	if !ok {
+	if len(id) == 0 {
 		glog.V(2).Infof("No configuration for host %s", node.LabelValue)
 		return false
 	}
 
 	// 2. Alive and healthy.
-	hostStatus, ok := this.hostStatus[id]
+	hostStatus := this.clusterState.HostStat(id)
 	glog.V(2).Infof("Found host status: %v for id: %s", hostStatus, id)
-	if !ok {
+	if hostStatus == nil {
 		glog.V(2).Infof("No status for host %s", node.LabelValue)
 		return false
 	}
