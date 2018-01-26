@@ -7,7 +7,6 @@ PACKAGES = . \
 	$(PROJECT)/client \
 	$(PROJECT)/config \
 	$(PROJECT)/file \
-	$(PROJECT)/host \
 	$(PROJECT)/lru \
 	$(PROJECT)/nameservice \
 	$(PROJECT)/ns \
@@ -23,7 +22,6 @@ PROJECT_DIRS = . \
 	client \
 	config \
 	file \
-	host \
 	lru \
 	nameservice \
 	ns \
