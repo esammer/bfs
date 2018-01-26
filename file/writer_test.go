@@ -3,10 +3,12 @@ package file
 import (
 	"bfs/blockservice"
 	"bfs/config"
+	"bfs/lru"
 	"bfs/nameservice"
 	"bfs/server/blockserver"
 	"bfs/server/nameserver"
 	"bfs/test"
+	"bfs/util"
 	"bfs/util/size"
 	"bytes"
 	"fmt"
@@ -42,8 +44,8 @@ func TestLocalFileWriter_Write(t *testing.T) {
 		&config.BlockServiceConfig{
 			BindAddress: "localhost:8084",
 			VolumeConfigs: []*config.PhysicalVolumeConfig{
-				{Path: filepath.Join(testDir.Path, "pv1"), AllowAutoInitialize: true},
-				{Path: filepath.Join(testDir.Path, "pv2"), AllowAutoInitialize: true},
+				{Path: filepath.Join(testDir.Path, "pv1"), AllowAutoInitialize: true, Labels: map[string]string{}},
+				{Path: filepath.Join(testDir.Path, "pv2"), AllowAutoInitialize: true, Labels: map[string]string{}},
 			},
 		},
 		rpcServer,
@@ -91,6 +93,21 @@ func TestLocalFileWriter_Write(t *testing.T) {
 
 	nameClient := nameservice.NewNameServiceClient(nameConn)
 
+	serviceCtx := &util.ServiceCtx{
+		Conn:               blockConn,
+		BlockServiceClient: blockClient,
+		NameServiceClient:  nameClient,
+	}
+
+	clientFactory := lru.NewCache(
+		2,
+		func(name string) (interface{}, error) {
+			return serviceCtx, nil
+		},
+		lru.DefaultDestroyFunc,
+	)
+	defer clientFactory.Purge()
+
 	zeroBuf := bytes.Repeat([]byte{0}, size.KB-1)
 
 	placementPolicy := NewLabelAwarePlacementPolicy(
@@ -102,9 +119,7 @@ func TestLocalFileWriter_Write(t *testing.T) {
 		nil,
 	)
 
-	//_, err = nameClient.AddVolume(context.Background(), &nameservice.AddVolumeRequest{VolumeId: "1", PvIds: pvIds})
-
-	writer, err := NewWriter(nameClient, blockClient, placementPolicy, "/test.txt", size.MB)
+	writer, err := NewWriter(nameClient, clientFactory, placementPolicy, "/test.txt", size.MB)
 	require.NoError(t, err)
 
 	writeLen, err := writer.Write(zeroBuf)
@@ -126,7 +141,7 @@ func TestLocalFileWriter_Write(t *testing.T) {
 // file sizes, and with multiple block sizes. Additionally, a baseline benchmark
 // that does direct local IO (i.e. os.Create()) is performed for comparison.
 //
-// File sizes are 1, 10, 100, and 512MB. Block sizes are 1, 8, and 10MB.
+// File sizes are 1, 8, 256, and 512MB. Block sizes are 1, 8, and 16MB.
 // Write() calls are 1MB buffers of byte(0) in all instances.
 func BenchmarkLocalFileWriter_Write(b *testing.B) {
 	defer glog.Flush()
@@ -187,6 +202,15 @@ func BenchmarkLocalFileWriter_Write(b *testing.B) {
 	defer blockConn.Close()
 
 	blockClient := blockservice.NewBlockServiceClient(blockConn)
+
+	clientFactory := lru.NewCache(
+		2,
+		func(name string) (interface{}, error) {
+			return blockClient, nil
+		},
+		lru.DefaultDestroyFunc,
+	)
+	defer clientFactory.Purge()
 
 	nameConn, err := grpc.Dial(
 		nameServer.Config.BindAddress,
@@ -252,7 +276,7 @@ func BenchmarkLocalFileWriter_Write(b *testing.B) {
 								)
 
 								for i := 0; i < b.N; i++ {
-									writer, err := NewWriter(nameClient, blockClient, placementPolicy, "/test.txt", blockSize)
+									writer, err := NewWriter(nameClient, clientFactory, placementPolicy, "/test.txt", blockSize)
 									require.NoError(b, err)
 
 									for j := 0; j < writeCount; j++ {

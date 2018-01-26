@@ -26,8 +26,8 @@ func TestBlockServer(t *testing.T) {
 	bsc := &config.BlockServiceConfig{
 		BindAddress: "localhost:8086",
 		VolumeConfigs: []*config.PhysicalVolumeConfig{
-			{Path: filepath.Join(testDir.Path, "1"), AllowAutoInitialize: true},
-			{Path: filepath.Join(testDir.Path, "2"), AllowAutoInitialize: true},
+			{Path: filepath.Join(testDir.Path, "1"), AllowAutoInitialize: true, Labels: map[string]string{}},
+			{Path: filepath.Join(testDir.Path, "2"), AllowAutoInitialize: true, Labels: map[string]string{}},
 		},
 	}
 

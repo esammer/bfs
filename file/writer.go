@@ -2,7 +2,10 @@ package file
 
 import (
 	"bfs/blockservice"
+	"bfs/config"
+	"bfs/lru"
 	"bfs/nameservice"
+	"bfs/util"
 	"context"
 	"github.com/golang/glog"
 	"io"
@@ -21,7 +24,7 @@ type Writer interface {
 type LocalFileWriter struct {
 	// Configuration
 	nameClient      nameservice.NameServiceClient
-	blockClient     blockservice.BlockServiceClient
+	clientFactory   *lru.LRUCache
 	placementPolicy BlockPlacementPolicy
 	blockSize       int
 	filename        string
@@ -35,18 +38,19 @@ type LocalFileWriter struct {
 	writeStream blockservice.BlockService_WriteClient
 
 	// Current block writer state.
-	blockPos     int
-	selectedPvId string
+	blockPos    int
+	blockClient blockservice.BlockServiceClient
+	selectedPv  *config.PhysicalVolumeConfig
 }
 
-func NewWriter(nameClient nameservice.NameServiceClient, blockClient blockservice.BlockServiceClient,
+func NewWriter(nameClient nameservice.NameServiceClient, clientFactory *lru.LRUCache,
 	placementPolicy BlockPlacementPolicy, filename string, blockSize int) (*LocalFileWriter, error) {
 
 	glog.V(2).Infof("Allocate writer for %v with blockSize %d", filename, blockSize)
 
 	return &LocalFileWriter{
 		nameClient:      nameClient,
-		blockClient:     blockClient,
+		clientFactory:   clientFactory,
 		placementPolicy: placementPolicy,
 		blockSize:       blockSize,
 		filename:        filename,
@@ -73,6 +77,20 @@ func (this *LocalFileWriter) Write(buffer []byte) (int, error) {
 
 			this.blockCount++
 
+			// Gather replica locations.
+			if pvs, err := this.placementPolicy.Next(); err != nil {
+				return totalWritten, err
+			} else {
+				this.selectedPv = pvs[0]
+				this.blockPos = 0
+			}
+
+			if blockClient, err := this.clientFactory.Get(this.selectedPv.Labels["endpoint"]); err != nil {
+				return totalWritten, err
+			} else {
+				this.blockClient = blockClient.(*util.ServiceCtx).BlockServiceClient
+			}
+
 			// Allocate a new block by creating a new write stream.
 			if writeStream, err := this.blockClient.Write(context.Background()); err != nil {
 				return totalWritten, err
@@ -80,14 +98,7 @@ func (this *LocalFileWriter) Write(buffer []byte) (int, error) {
 				this.writeStream = writeStream
 			}
 
-			//this.selectedPvId = this.pvIds[(this.pvSelectionSeed+this.blockCount)%len(this.pvIds)]
-			if pvs, err := this.placementPolicy.Next(); err != nil {
-				return totalWritten, err
-			} else {
-				this.selectedPvId = pvs[0].Id
-				this.blockPos = 0
-			}
-			glog.V(1).Infof("Allocated new block %d on %s - filePos: %d", this.blockCount, this.selectedPvId, this.filePos)
+			glog.V(1).Infof("Allocated new block %d on %s - filePos: %d", this.blockCount, this.selectedPv, this.filePos)
 		}
 
 		// Decide how much of the buffer to write.
@@ -100,10 +111,10 @@ func (this *LocalFileWriter) Write(buffer []byte) (int, error) {
 		// If there's data left to write, write it.
 		if writeLen > 0 {
 			glog.V(2).Infof("Write %d:%d of %d bytes to %v on %s", bufferPos, bufferPos+writeLen, len(buffer),
-				this.filename, this.selectedPvId)
+				this.filename, this.selectedPv)
 
 			if err := this.writeStream.Send(&blockservice.WriteRequest{
-				VolumeId: this.selectedPvId,
+				VolumeId: this.selectedPv.Id,
 				Buffer:   buffer[bufferPos:bufferPos+writeLen],
 			}); err != nil {
 				return totalWritten, err

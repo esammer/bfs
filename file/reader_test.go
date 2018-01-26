@@ -3,10 +3,12 @@ package file
 import (
 	"bfs/blockservice"
 	"bfs/config"
+	"bfs/lru"
 	"bfs/nameservice"
 	"bfs/server/blockserver"
 	"bfs/server/nameserver"
 	"bfs/test"
+	"bfs/util"
 	"bfs/util/size"
 	"bytes"
 	"github.com/golang/glog"
@@ -41,8 +43,8 @@ func TestLocalFileReader_Read(t *testing.T) {
 		&config.BlockServiceConfig{
 			BindAddress: "localhost:8084",
 			VolumeConfigs: []*config.PhysicalVolumeConfig{
-				{Path: filepath.Join(testDir.Path, "pv1"), AllowAutoInitialize: true},
-				{Path: filepath.Join(testDir.Path, "pv2"), AllowAutoInitialize: true},
+				{Path: filepath.Join(testDir.Path, "pv1"), AllowAutoInitialize: true, Labels: map[string]string{}},
+				{Path: filepath.Join(testDir.Path, "pv2"), AllowAutoInitialize: true, Labels: map[string]string{}},
 			},
 		},
 		rpcServer,
@@ -106,7 +108,29 @@ func TestLocalFileReader_Read(t *testing.T) {
 		nil,
 	)
 
-	writer, err := NewWriter(nameClient, blockClient, placementPolicy, "/test.txt", size.MB)
+	clientFactory := lru.NewCache(
+		2,
+		func(name string) (interface{}, error) {
+			conn, err := grpc.Dial(name, grpc.WithBlock(), grpc.WithInsecure())
+			if err != nil {
+				return nil, err
+			}
+
+			return &util.ServiceCtx{
+				Conn:               conn,
+				BlockServiceClient: blockservice.NewBlockServiceClient(conn),
+			}, nil
+		},
+		func(name string, value interface{}) error {
+			if value != nil {
+				return value.(*util.ServiceCtx).Conn.Close()
+			}
+
+			return nil
+		},
+	)
+
+	writer, err := NewWriter(nameClient, clientFactory, placementPolicy, "/test.txt", size.MB)
 	require.NoError(t, err)
 
 	_, err = writer.Write(zeroBuf)

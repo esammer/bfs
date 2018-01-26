@@ -35,6 +35,7 @@ func (this *BlockServer) Start() error {
 
 		// Hack for populating pv ID. Requiring mutability here sucks.
 		pvConfig.Id = pv.ID.String()
+		pvConfig.Labels["endpoint"] = this.Config.BindAddress
 		this.PhysicalVolumes = append(this.PhysicalVolumes, pv)
 	}
 

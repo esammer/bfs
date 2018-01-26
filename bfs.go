@@ -142,18 +142,23 @@ func (this *BFSServer) configure() error {
 		parsedLabels[components[0]] = components[1]
 	}
 
-	hostname, err := os.Hostname()
-	if err != nil {
-		return err
+	if hostConfig.Id == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			return err
+		}
+
+		hostConfig.Id = hostname
+		hostConfig.Hostname = hostname
+		glog.V(2).Infof("No host id specified - discovered hostname %s", hostname)
+	} else {
+		hostConfig.Hostname = hostConfig.Id
+		glog.V(2).Infof("Using host id %s as host identity", hostConfig.Id)
 	}
 
 	hostConfig.NameServiceConfig = nsConfig
 	hostConfig.BlockServiceConfig = bsConfig
 	hostConfig.Labels = parsedLabels
-	hostConfig.Hostname = hostname
-	if hostConfig.Id == "" {
-		hostConfig.Id = hostname
-	}
 
 	this.HostConfig = hostConfig
 

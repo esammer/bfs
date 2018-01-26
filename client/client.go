@@ -6,6 +6,7 @@ import (
 	"bfs/file"
 	"bfs/lru"
 	"bfs/nameservice"
+	"bfs/util"
 	"bfs/util/size"
 	"context"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"path/filepath"
 	"stathat.com/c/consistent"
 	"strings"
+	"time"
 	"unsafe"
 )
 
@@ -30,12 +32,6 @@ type Client struct {
 
 	volumeWatcher *Watcher
 	hostWatcher   *Watcher
-}
-
-type serviceClient struct {
-	conn        *grpc.ClientConn
-	nameClient  nameservice.NameServiceClient
-	blockClient blockservice.BlockServiceClient
 }
 
 func New(endpoints []string) (*Client, error) {
@@ -208,15 +204,16 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 		func(name string) (interface{}, error) {
 			glog.V(2).Infof("Creating new connection for %s", name)
 
-			conn, err := grpc.Dial(name, grpc.WithBlock(), grpc.WithInsecure())
+			ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+			conn, err := grpc.DialContext(ctx, name, grpc.WithBlock(), grpc.WithInsecure())
 			if err != nil {
 				return nil, err
 			}
 
-			c := &serviceClient{
-				conn:        conn,
-				nameClient:  nameservice.NewNameServiceClient(conn),
-				blockClient: blockservice.NewBlockServiceClient(conn),
+			c := &util.ServiceCtx{
+				Conn:               conn,
+				NameServiceClient:  nameservice.NewNameServiceClient(conn),
+				BlockServiceClient: blockservice.NewBlockServiceClient(conn),
 			}
 
 			return c, nil
@@ -224,7 +221,7 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 		func(name string, value interface{}) error {
 			glog.V(2).Infof("Destroying connection for %s", name)
 
-			return value.(*serviceClient).conn.Close()
+			return value.(*util.ServiceCtx).Conn.Close()
 		},
 	)
 
@@ -265,12 +262,12 @@ func (this *Client) Create(path string, blockSize int) (file.Writer, error) {
 		pvConfigs,
 		"hostname",
 		false,
-		3,
+		1,
 		1,
 		this.blockAcceptFunc,
 	)
 
-	return file.NewWriter(conn.nameClient, conn.blockClient, placementPolicy, path, blockSize)
+	return file.NewWriter(conn.NameServiceClient, this.clientLRU, placementPolicy, path, blockSize)
 }
 
 func (this *Client) Open(path string) (file.Reader, error) {
@@ -279,14 +276,14 @@ func (this *Client) Open(path string) (file.Reader, error) {
 		return nil, err
 	}
 
-	reader := file.NewReader(conn.nameClient, conn.blockClient, path)
+	reader := file.NewReader(conn.NameServiceClient, conn.BlockServiceClient, path)
 	return reader, reader.Open()
 }
 
 func (this *Client) Stat(path string) (*nameservice.Entry, error) {
 	conn, _, err := this.connectionForPath(path)
 
-	getResp, err := conn.nameClient.Get(context.Background(), &nameservice.GetRequest{Path: path})
+	getResp, err := conn.NameServiceClient.Get(context.Background(), &nameservice.GetRequest{Path: path})
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +297,7 @@ func (this *Client) Remove(path string) error {
 		return err
 	}
 
-	_, err = conn.nameClient.Delete(context.Background(), &nameservice.DeleteRequest{Path: path})
+	_, err = conn.NameServiceClient.Delete(context.Background(), &nameservice.DeleteRequest{Path: path})
 	if err != nil {
 		return err
 	}
@@ -321,25 +318,25 @@ func (this *Client) Rename(sourcePath string, destinationPath string) error {
 
 	if sourceHostId != destHostId {
 		// Rename requires relocation.
-		getResp, err := sourceConn.nameClient.Get(context.Background(), &nameservice.GetRequest{Path: sourcePath})
+		getResp, err := sourceConn.NameServiceClient.Get(context.Background(), &nameservice.GetRequest{Path: sourcePath})
 		if err != nil {
 			return err
 		}
 
-		_, err = destConn.nameClient.Add(context.Background(), &nameservice.AddRequest{
+		_, err = destConn.NameServiceClient.Add(context.Background(), &nameservice.AddRequest{
 			Entry: getResp.Entry,
 		})
 		if err != nil {
 			return err
 		}
 
-		_, err = sourceConn.nameClient.Delete(context.Background(), &nameservice.DeleteRequest{Path: sourcePath})
+		_, err = sourceConn.NameServiceClient.Delete(context.Background(), &nameservice.DeleteRequest{Path: sourcePath})
 		if err != nil {
 			return err
 		}
 	} else {
 		// Rename is on the same host.
-		_, err := sourceConn.nameClient.Rename(
+		_, err := sourceConn.NameServiceClient.Rename(
 			context.Background(),
 			&nameservice.RenameRequest{
 				SourcePath:      sourcePath,
@@ -366,9 +363,9 @@ func (this *Client) List(startKey string, endKey string) <-chan *nameservice.Ent
 				close(iterChan)
 				return
 			}
-			conn := o.(*serviceClient)
+			conn := o.(*util.ServiceCtx)
 
-			listStream, err := conn.nameClient.List(context.Background(), &nameservice.ListRequest{StartKey: startKey, EndKey: endKey})
+			listStream, err := conn.NameServiceClient.List(context.Background(), &nameservice.ListRequest{StartKey: startKey, EndKey: endKey})
 			if err != nil {
 				glog.V(2).Infof("Closing list stream due to %v", err)
 				close(iterChan)
@@ -474,7 +471,7 @@ func (this *Client) Close() error {
 	return nil
 }
 
-func (this *Client) connectionForPath(path string) (*serviceClient, string, error) {
+func (this *Client) connectionForPath(path string) (*util.ServiceCtx, string, error) {
 	hostId, err := this.hash.Get(path)
 	if err != nil {
 		return nil, "", err
@@ -485,7 +482,7 @@ func (this *Client) connectionForPath(path string) (*serviceClient, string, erro
 		return nil, "", err
 	}
 
-	return obj.(*serviceClient), hostId, nil
+	return obj.(*util.ServiceCtx), hostId, nil
 }
 
 func (this *Client) blockAcceptFunc(node *file.ValueNode) bool {
