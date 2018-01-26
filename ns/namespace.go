@@ -10,6 +10,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"io"
+	"strings"
 	"time"
 )
 
@@ -262,14 +263,37 @@ func (this *Namespace) List(from string, to string, visitor func(*Entry, error) 
 	return nil
 }
 
-func (this *Namespace) Delete(path string) error {
-	glog.V(1).Infof("Deleting entry %s", path)
+func (this *Namespace) Delete(path string, recursive bool) (uint32, error) {
+	glog.V(1).Infof("Deleting entry %s recursive: %t", path, recursive)
 
 	if this.state != namespaceStatus_OPEN {
-		return fmt.Errorf("unable to perform operation in state %v", this.state)
+		return 0, fmt.Errorf("unable to perform operation in state %v", this.state)
 	}
 
-	return this.db.Delete(keyFor(dbPrefix_Entry, path), defaultWriteOpts)
+	batch := leveldb.Batch{}
+	var entriesDeleted uint32 = 0
+
+	this.List(path, "", func(entry *Entry, err error) (bool, error) {
+		if err == io.EOF {
+			return false, nil
+		} else if err != nil {
+			return false, err
+		}
+
+		if recursive && !strings.HasPrefix(entry.Path, path) {
+			glog.V(3).Infof("recursive: %t !prefix: %t", recursive, !strings.HasPrefix(entry.Path, path))
+			return false, nil
+		} else if !recursive && entry.Path != path {
+			glog.V(3).Infof("entry != path: %t", entry.Path != path)
+			return false, nil
+		}
+
+		batch.Delete(keyFor(dbPrefix_Entry, entry.Path))
+		entriesDeleted++
+		return true, nil
+	})
+
+	return entriesDeleted, this.db.Write(&batch, defaultWriteOpts)
 }
 
 func (this *Namespace) Rename(from string, to string) (bool, error) {

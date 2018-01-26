@@ -22,10 +22,11 @@ message AddResponse {
 
 message DeleteRequest {
   string path = 1;
+  bool recursive = 2;
 }
 
 message DeleteResponse {
-
+  uint32 entriesDeleted = 1;
 }
 
 message RenameRequest {

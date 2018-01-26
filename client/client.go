@@ -144,7 +144,6 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 					return nil
 				} else {
 					client.clusterState.AddHostConfig(hostConfig)
-					client.hash.Add(hostConfig.Id)
 				}
 			} else if entryType == "status" {
 				status := hostStatusDeser(kv)
@@ -154,6 +153,7 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 					return nil
 				} else {
 					client.clusterState.AddHostStatus(status)
+					client.hash.Add(status.Id)
 				}
 			}
 
@@ -177,10 +177,10 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 				}
 
 				client.clusterState.RemoveHostConfig(hostConfig.Id)
-				client.hash.Remove(hostConfig.Id)
 			} else if entryType == "status" {
 				status := hostStatusDeser(kv)
 
+				client.hash.Remove(status.Id)
 				client.clusterState.RemoveHostStatus(status.Id)
 			}
 
@@ -291,18 +291,21 @@ func (this *Client) Stat(path string) (*nameservice.Entry, error) {
 	return getResp.Entry, nil
 }
 
-func (this *Client) Remove(path string) error {
+func (this *Client) Remove(path string, recursive bool) (uint32, error) {
 	conn, _, err := this.connectionForPath(path)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	_, err = conn.NameServiceClient.Delete(context.Background(), &nameservice.DeleteRequest{Path: path})
+	resp, err := conn.NameServiceClient.Delete(
+		context.Background(),
+		&nameservice.DeleteRequest{Path: path, Recursive: recursive},
+	)
 	if err != nil {
-		return err
+		return resp.EntriesDeleted, err
 	}
 
-	return nil
+	return resp.EntriesDeleted, nil
 }
 
 func (this *Client) Rename(sourcePath string, destinationPath string) error {

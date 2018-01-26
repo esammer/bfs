@@ -344,6 +344,9 @@ func (this *BFSClient) Run() error {
 	lsFlags := flag.NewFlagSet("ls", flag.ContinueOnError)
 	humanNumbers := lsFlags.Bool("H", false, "use human-friendly numbers")
 
+	rmFlags := flag.NewFlagSet("rm", flag.ContinueOnError)
+	rmRecursive := rmFlags.Bool("R", false, "recursively delete files under the given path")
+
 	clientFlags.Parse(os.Args[2:])
 
 	flag.Parse()
@@ -472,12 +475,19 @@ func (this *BFSClient) Run() error {
 			return err
 		}
 	case "rm":
-		if len(clientArgs) < 2 {
-			return errors.New("usage: rm <file> [file...]")
+		if err := rmFlags.Parse(clientArgs[1:]); err != nil {
+			return err
 		}
 
-		if err := cli.Remove(clientArgs[1]); err != nil {
+		clientArgs = rmFlags.Args()
+		if len(clientArgs) == 0 {
+			return errors.New("usage: rm <file>")
+		}
+
+		if deleted, err := cli.Remove(clientArgs[0], *rmRecursive); err != nil {
 			return err
+		} else {
+			fmt.Printf("%d files removed\n", deleted)
 		}
 	case "pvs":
 		hostConfigs := cli.Hosts()

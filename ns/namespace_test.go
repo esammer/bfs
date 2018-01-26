@@ -13,6 +13,8 @@ import (
 )
 
 func TestNamespace_Open(t *testing.T) {
+	defer glog.Flush()
+
 	testDir := test.New("build", "test", t.Name())
 	err := testDir.Create()
 	require.NoError(t, err)
@@ -103,8 +105,47 @@ func TestNamespace_Open(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = ns.Delete("/a.txt")
+	deleted, err := ns.Delete("/a.txt", false)
 	require.NoError(t, err)
+	require.Equal(t, uint32(1), deleted)
+
+	now := time.Now()
+	for i := 0; i < 2; i++ {
+		for j := 0; j < 10; j++ {
+			require.NoError(t, ns.Add(&Entry{
+				VolumeName:       "/",
+				Path:             fmt.Sprintf("/c%d/%d.txt", i, j),
+				Size:             size.MB,
+				BlockSize:        512 * size.KB,
+				ReplicationLevel: 1,
+				Status:           FileStatus_OK,
+				Permissions:      0,
+				Ctime:            now,
+				Mtime:            now,
+				Blocks: []*BlockMetadata{
+					{LVName: "/", Block: "1", PVID: "1"},
+					{LVName: "/", Block: "2", PVID: "2"},
+					{LVName: "/", Block: "3", PVID: "1"},
+				},
+			}))
+		}
+
+		deleted, err = ns.Delete(fmt.Sprintf("/c%d/", i), true)
+		require.NoError(t, err)
+		require.Equal(t, uint32(10), deleted)
+	}
+
+	remainingFiles := 0
+	ns.List("/c", "", func(entry *Entry, err error) (bool, error) {
+		if err != nil {
+			return false, err
+		}
+
+		remainingFiles++
+		return true, nil
+	})
+
+	require.Equal(t, 1, remainingFiles)
 
 	ok, err := ns.Rename("/b.txt", "/a.txt")
 	require.NoError(t, err)
@@ -186,8 +227,9 @@ func BenchmarkNamespace(b *testing.B) {
 	})
 	b.Run("Delete", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			err := ns.Delete(fmt.Sprintf("/b%d.txt", i))
+			deleted, err := ns.Delete(fmt.Sprintf("/b%d.txt", i), false)
 			require.NoError(b, err)
+			require.Equal(b, 1, deleted)
 		}
 	})
 	b.Run("List", func(b *testing.B) {

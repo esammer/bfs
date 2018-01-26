@@ -85,7 +85,9 @@ func (this *NameService) Add(ctx context.Context, request *AddRequest) (*AddResp
 }
 
 func (this *NameService) Delete(ctx context.Context, request *DeleteRequest) (*DeleteResponse, error) {
-	return &DeleteResponse{}, this.Namespace.Delete(request.Path)
+	entriesDeleted, err := this.Namespace.Delete(request.Path, request.Recursive)
+
+	return &DeleteResponse{EntriesDeleted: entriesDeleted}, err
 }
 
 func (this *NameService) Rename(ctx context.Context, request *RenameRequest) (*RenameResponse, error) {
