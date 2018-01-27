@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -496,7 +497,27 @@ func (this *BFSClient) Run() error {
 		hostConfigs := cli.Hosts()
 		for _, hostConfig := range hostConfigs {
 			for _, pv := range hostConfig.BlockServiceConfig.VolumeConfigs {
-				fmt.Printf("%s %s\n", pv.Id, hostConfig.Hostname)
+				fmt.Printf("%s %s", hostConfig.Hostname, pv.Id)
+
+				if len(pv.Labels) > 0 {
+					keys := make([]string, 0, len(pv.Labels))
+
+					for k := range pv.Labels {
+						keys = append(keys, k)
+					}
+
+					sort.Slice(keys, func(i, j int) bool {
+						return strings.Compare(keys[i], keys[j]) == -1
+					})
+
+					for i := range keys {
+						keys[i] = keys[i] + " = " + pv.Labels[keys[i]]
+					}
+
+					fmt.Printf(" [%s]", strings.Join(keys, ", "))
+				}
+
+				fmt.Println()
 			}
 		}
 	case "lvs":
