@@ -11,19 +11,21 @@ option go_package = "bfs/config";
 message HostConfig {
   string id = 1;
   string hostname = 2;
-  BlockServiceConfig blockServiceConfig = 3;
-  NameServiceConfig nameServiceConfig = 4;
-  map<string, string> labels = 5;
+  int32 port = 3;
+  BlockServiceConfig blockServiceConfig = 4;
+  NameServiceConfig nameServiceConfig = 5;
+  map<string, string> labels = 6;
 }
 
 message BlockServiceConfig {
-  string bindAddress = 1;
-  repeated PhysicalVolumeConfig volumeConfigs = 2;
+  string hostname = 1;
+  int32 port = 2;
+  repeated PhysicalVolumeConfig volumeConfigs = 3;
 }
 
 message NameServiceConfig {
-  string bindAddress = 1;
-  string advertiseAddress = 2;
+  string hostname = 1;
+  int32 port = 2;
   string path = 3;
 }
 

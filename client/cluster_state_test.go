@@ -15,7 +15,8 @@ func TestClusterState(t *testing.T) {
 				Id:       "host1",
 				Hostname: "hostname1",
 				BlockServiceConfig: &config.BlockServiceConfig{
-					BindAddress: "localhost:60000",
+					Hostname: "localhost:60000",
+					Port:     60000,
 					VolumeConfigs: []*config.PhysicalVolumeConfig{
 						{
 							Id:   "pv1",
@@ -32,7 +33,8 @@ func TestClusterState(t *testing.T) {
 				Id:       "host2",
 				Hostname: "hostname2",
 				BlockServiceConfig: &config.BlockServiceConfig{
-					BindAddress: "localhost:60000",
+					Hostname: "localhost:60000",
+					Port:     60000,
 					VolumeConfigs: []*config.PhysicalVolumeConfig{
 						{
 							Id:   "pv3",
@@ -83,7 +85,8 @@ func TestClusterState(t *testing.T) {
 			Id:       "host1",
 			Hostname: "hostname1",
 			BlockServiceConfig: &config.BlockServiceConfig{
-				BindAddress: "localhost:60000",
+				Hostname: "localhost:60000",
+				Port:     60000,
 				VolumeConfigs: []*config.PhysicalVolumeConfig{
 					{
 						Id:   "pv1",
@@ -132,7 +135,8 @@ func BenchmarkClusterState(b *testing.B) {
 				Id:       "host1",
 				Hostname: "hostname1",
 				BlockServiceConfig: &config.BlockServiceConfig{
-					BindAddress: "localhost:60000",
+					Hostname: "localhost:60000",
+					Port:     60000,
 					VolumeConfigs: []*config.PhysicalVolumeConfig{
 						{
 							Id:   "pv1",
@@ -149,7 +153,8 @@ func BenchmarkClusterState(b *testing.B) {
 				Id:       "host2",
 				Hostname: "hostname2",
 				BlockServiceConfig: &config.BlockServiceConfig{
-					BindAddress: "localhost:60000",
+					Hostname: "localhost:60000",
+					Port:     60000,
 					VolumeConfigs: []*config.PhysicalVolumeConfig{
 						{
 							Id:   "pv3",

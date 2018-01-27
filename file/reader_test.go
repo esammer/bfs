@@ -11,6 +11,7 @@ import (
 	"bfs/util"
 	"bfs/util/size"
 	"bytes"
+	"fmt"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,6 +32,8 @@ func TestLocalFileReader_Read(t *testing.T) {
 		testDir.Destroy()
 	}()
 
+	bindAddress := fmt.Sprintf("%s:%d", "localhost", 8084)
+
 	rpcServer := grpc.NewServer(
 		grpc.WriteBufferSize(size.MB*8),
 		grpc.ReadBufferSize(size.MB*8),
@@ -41,7 +44,8 @@ func TestLocalFileReader_Read(t *testing.T) {
 
 	blockServer := blockserver.New(
 		&config.BlockServiceConfig{
-			BindAddress: "localhost:8084",
+			Hostname: "localhost",
+			Port:     8084,
 			VolumeConfigs: []*config.PhysicalVolumeConfig{
 				{Path: filepath.Join(testDir.Path, "pv1"), AllowAutoInitialize: true, Labels: map[string]string{}},
 				{Path: filepath.Join(testDir.Path, "pv2"), AllowAutoInitialize: true, Labels: map[string]string{}},
@@ -55,22 +59,22 @@ func TestLocalFileReader_Read(t *testing.T) {
 
 	nameServer := nameserver.New(
 		&config.NameServiceConfig{
-			BindAddress:      "localhost:8084",
-			AdvertiseAddress: "localhost:8084",
-			Path:             filepath.Join(testDir.Path, "ns"),
+			Hostname: "localhost",
+			Port:     8084,
+			Path:     filepath.Join(testDir.Path, "ns"),
 		},
 		rpcServer,
 	)
 	require.NoError(t, nameServer.Start())
 	defer func() { assert.NoError(t, nameServer.Stop()) }()
 
-	listener, err := net.Listen("tcp", blockServer.Config.BindAddress)
+	listener, err := net.Listen("tcp", bindAddress)
 	go func() {
 		assert.NoError(t, rpcServer.Serve(listener))
 	}()
 
 	blockConn, err := grpc.Dial(
-		blockServer.Config.BindAddress,
+		bindAddress,
 		grpc.WithInsecure(),
 		grpc.WithBlock(),
 		grpc.WithWriteBufferSize(size.MB*8),
@@ -83,7 +87,7 @@ func TestLocalFileReader_Read(t *testing.T) {
 	blockClient := blockservice.NewBlockServiceClient(blockConn)
 
 	nameConn, err := grpc.Dial(
-		nameServer.Config.BindAddress,
+		bindAddress,
 		grpc.WithInsecure(),
 		grpc.WithBlock(),
 	)

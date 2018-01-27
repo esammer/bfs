@@ -7,6 +7,7 @@ import (
 	"bfs/util/size"
 	"bytes"
 	"context"
+	"fmt"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,14 +25,17 @@ func TestBlockServer(t *testing.T) {
 	defer testDir.Destroy()
 
 	bsc := &config.BlockServiceConfig{
-		BindAddress: "localhost:8086",
+		Hostname: "localhost",
+		Port:     8086,
 		VolumeConfigs: []*config.PhysicalVolumeConfig{
 			{Path: filepath.Join(testDir.Path, "1"), AllowAutoInitialize: true, Labels: map[string]string{}},
 			{Path: filepath.Join(testDir.Path, "2"), AllowAutoInitialize: true, Labels: map[string]string{}},
 		},
 	}
 
-	listener, err := net.Listen("tcp", bsc.BindAddress)
+	bindAddress := fmt.Sprintf("%s:%d", "localhost", 8086)
+
+	listener, err := net.Listen("tcp", bindAddress)
 	require.NoError(t, err)
 	rpcServer := grpc.NewServer()
 	defer rpcServer.GracefulStop()
@@ -45,7 +49,7 @@ func TestBlockServer(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 
-	conn, err := grpc.Dial(bsc.BindAddress, grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(bindAddress, grpc.WithInsecure(), grpc.WithBlock())
 	require.NoError(t, err)
 	defer conn.Close()
 

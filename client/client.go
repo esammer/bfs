@@ -362,7 +362,9 @@ func (this *Client) List(startKey string, endKey string) <-chan *nameservice.Ent
 		for _, hostConfig := range this.clusterState.HostConfigs() {
 			glog.V(logging.LogLevelTrace).Infof("List on %s", hostConfig.Hostname)
 
-			o, err := this.clientLRU.Get(hostConfig.NameServiceConfig.AdvertiseAddress)
+			connectionAddress := fmt.Sprintf("%s:%d", hostConfig.NameServiceConfig.Hostname, hostConfig.NameServiceConfig.Port)
+
+			o, err := this.clientLRU.Get(connectionAddress)
 			if err != nil {
 				close(iterChan)
 				return
@@ -481,7 +483,9 @@ func (this *Client) connectionForPath(path string) (*util.ServiceCtx, string, er
 		return nil, "", err
 	}
 
-	obj, err := this.clientLRU.Get(this.clusterState.HostConfig(hostId).NameServiceConfig.AdvertiseAddress)
+	nsc := this.clusterState.HostConfig(hostId).NameServiceConfig
+	connectionAddress := fmt.Sprintf("%s:%d", nsc.Hostname, nsc.Port)
+	obj, err := this.clientLRU.Get(connectionAddress)
 	if err != nil {
 		return nil, "", err
 	}

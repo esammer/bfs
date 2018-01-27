@@ -6,6 +6,7 @@ import (
 	"bfs/test"
 	"bfs/util/size"
 	"context"
+	"fmt"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,12 +25,13 @@ func TestNameServer(t *testing.T) {
 	defer testDir.Destroy()
 
 	nsc := &config.NameServiceConfig{
-		BindAddress:      "localhost:8086",
-		AdvertiseAddress: "localhost:8086",
-		Path:             filepath.Join(testDir.Path, "ns"),
+		Hostname: "localhost",
+		Port:     8086,
+		Path:     filepath.Join(testDir.Path, "ns"),
 	}
 
-	listener, err := net.Listen("tcp", nsc.BindAddress)
+	bindAddress := fmt.Sprintf("%s:%d", "localhost", 8086)
+	listener, err := net.Listen("tcp", bindAddress)
 	require.NoError(t, err)
 	rpcServer := grpc.NewServer()
 	defer rpcServer.GracefulStop()
@@ -43,7 +45,7 @@ func TestNameServer(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 
-	conn, err := grpc.Dial(nsc.BindAddress, grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(bindAddress, grpc.WithInsecure(), grpc.WithBlock())
 	require.NoError(t, err)
 	defer conn.Close()
 

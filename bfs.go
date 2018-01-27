@@ -73,14 +73,14 @@ func (this *BFSServer) configure() error {
 
 	var volumePaths ListValue
 	var allowAutoInit bool
-	var bindAddress string
+	var port int
 	var hostLabels ListValue
 
 	serverFlags := flag.NewFlagSet("server", flag.ContinueOnError)
 	serverFlags.Var(&volumePaths, "volume", "physical volume directory (repeatable)")
 	serverFlags.BoolVar(&allowAutoInit, "auto-init", false, "allow auto-initialization of physical volumes")
 	serverFlags.BoolVar(&allowAutoInit, "a", false, "allow auto-initialization of physical volumes")
-	serverFlags.StringVar(&bindAddress, "bind", "127.0.0.1:60000", "bind address")
+	serverFlags.IntVar(&port, "port", 60000, "bind port")
 	serverFlags.StringVar(&nsConfig.Path, "ns", "", "namespace directory")
 	serverFlags.StringVar(&hostConfig.Id, "id", "", "node id")
 	serverFlags.Var(&hostLabels, "label", "host labels")
@@ -120,23 +120,6 @@ func (this *BFSServer) configure() error {
 		})
 	}
 
-	bsConfig.BindAddress = bindAddress
-	bsConfig.VolumeConfigs = pvConfigs
-
-	nsConfig.BindAddress = bindAddress
-	nsConfig.AdvertiseAddress = bindAddress
-
-	this.BlockServiceConfig = bsConfig
-	this.NameServiceConfig = nsConfig
-
-	if len(this.NameServiceConfig.Path) == 0 {
-		return errors.New("--ns is required")
-	}
-
-	if len(this.BlockServiceConfig.VolumeConfigs) == 0 {
-		return errors.New("at least one --volume is required")
-	}
-
 	parsedLabels := make(map[string]string, len(hostLabels))
 	for _, label := range hostLabels {
 		components := strings.Split(label, "=")
@@ -160,8 +143,26 @@ func (this *BFSServer) configure() error {
 	hostConfig.NameServiceConfig = nsConfig
 	hostConfig.BlockServiceConfig = bsConfig
 	hostConfig.Labels = parsedLabels
+	hostConfig.Port = int32(port)
 
+	bsConfig.Hostname = hostConfig.Hostname
+	bsConfig.Port = hostConfig.Port
+	bsConfig.VolumeConfigs = pvConfigs
+
+	nsConfig.Hostname = hostConfig.Hostname
+	nsConfig.Port = hostConfig.Port
+
+	this.BlockServiceConfig = bsConfig
+	this.NameServiceConfig = nsConfig
 	this.HostConfig = hostConfig
+
+	if len(this.NameServiceConfig.Path) == 0 {
+		return errors.New("--ns is required")
+	}
+
+	if len(this.BlockServiceConfig.VolumeConfigs) == 0 {
+		return errors.New("at least one --volume is required")
+	}
 
 	return nil
 }
@@ -200,9 +201,10 @@ func (this *BFSServer) start() error {
 
 	rpcServer := grpc.NewServer()
 
-	listener, err := net.Listen("tcp", this.NameServiceConfig.BindAddress)
+	bindAddress := fmt.Sprintf("%s:%d", this.HostConfig.Hostname, this.HostConfig.Port)
+	listener, err := net.Listen("tcp", bindAddress)
 	if err != nil {
-		return fmt.Errorf("failed to bind to %s - %v", this.NameServiceConfig.BindAddress, err)
+		return fmt.Errorf("failed to bind to %s - %v", bindAddress, err)
 	}
 
 	this.blockServer = blockserver.New(this.BlockServiceConfig, rpcServer)
@@ -309,7 +311,7 @@ func (this *BFSServer) start() error {
 			}
 		}
 	}()
-	glog.Infof("Server running on %s - use SIGINT to stop", this.NameServiceConfig.BindAddress)
+	glog.Infof("Server running on %s - use SIGINT to stop", bindAddress)
 
 	err = <-rpcQuitChan
 	if err != nil {
