@@ -164,8 +164,8 @@ func BenchmarkLocalFileWriter_Write(b *testing.B) {
 		&config.BlockServiceConfig{
 			BindAddress: "localhost:8084",
 			VolumeConfigs: []*config.PhysicalVolumeConfig{
-				{Path: filepath.Join(testDir.Path, "pv1"), AllowAutoInitialize: true},
-				{Path: filepath.Join(testDir.Path, "pv2"), AllowAutoInitialize: true},
+				{Path: filepath.Join(testDir.Path, "pv1"), AllowAutoInitialize: true, Labels: map[string]string{}},
+				{Path: filepath.Join(testDir.Path, "pv2"), AllowAutoInitialize: true, Labels: map[string]string{}},
 			},
 		},
 		rpcServer,
@@ -203,15 +203,6 @@ func BenchmarkLocalFileWriter_Write(b *testing.B) {
 
 	blockClient := blockservice.NewBlockServiceClient(blockConn)
 
-	clientFactory := lru.NewCache(
-		2,
-		func(name string) (interface{}, error) {
-			return blockClient, nil
-		},
-		lru.DefaultDestroyFunc,
-	)
-	defer clientFactory.Purge()
-
 	nameConn, err := grpc.Dial(
 		nameServer.Config.BindAddress,
 		grpc.WithInsecure(),
@@ -221,6 +212,21 @@ func BenchmarkLocalFileWriter_Write(b *testing.B) {
 	defer nameConn.Close()
 
 	nameClient := nameservice.NewNameServiceClient(nameConn)
+
+	serviceCtx := &util.ServiceCtx{
+		Conn:               blockConn,
+		BlockServiceClient: blockClient,
+		NameServiceClient:  nameClient,
+	}
+
+	clientFactory := lru.NewCache(
+		2,
+		func(name string) (interface{}, error) {
+			return serviceCtx, nil
+		},
+		lru.DefaultDestroyFunc,
+	)
+	defer clientFactory.Purge()
 
 	placementPolicy := NewLabelAwarePlacementPolicy(
 		blockServer.Config.VolumeConfigs,
