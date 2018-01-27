@@ -2,6 +2,7 @@ package blockservice
 
 import (
 	"bfs/block"
+	"bfs/util/logging"
 	"bfs/util/size"
 	"context"
 	"fmt"
@@ -33,7 +34,7 @@ func New(volumes []*PhysicalVolume) *BlockService {
 }
 
 func (this *BlockService) Write(stream BlockService_WriteServer) error {
-	glog.V(1).Info("Received write request")
+	glog.V(logging.LogLevelDebug).Info("Received write request")
 
 	var writer block.BlockWriter
 	var blockId string
@@ -42,12 +43,12 @@ func (this *BlockService) Write(stream BlockService_WriteServer) error {
 	totalWritten := 0
 
 	for chunkIter := 0; ; chunkIter++ {
-		glog.V(2).Infof("Writer iter %d - start", chunkIter)
+		glog.V(logging.LogLevelTrace).Infof("Writer iter %d - start", chunkIter)
 
 		request, err := stream.Recv()
 
 		if err == io.EOF {
-			glog.V(2).Infof("Writer iter %d - EOF", chunkIter)
+			glog.V(logging.LogLevelTrace).Infof("Writer iter %d - EOF", chunkIter)
 
 			break
 		} else if err != nil {
@@ -57,7 +58,7 @@ func (this *BlockService) Write(stream BlockService_WriteServer) error {
 		}
 
 		if writer == nil {
-			glog.V(2).Infof("Writer iter %d - Start writer", chunkIter)
+			glog.V(logging.LogLevelTrace).Infof("Writer iter %d - Start writer", chunkIter)
 
 			volumeId = request.VolumeId
 			pv, ok := this.volumeIdx[volumeId]
@@ -75,7 +76,7 @@ func (this *BlockService) Write(stream BlockService_WriteServer) error {
 			}
 		}
 
-		glog.V(2).Infof(
+		glog.V(logging.LogLevelTrace).Infof(
 			"Write iter %d - Received request size: %d",
 			chunkIter,
 			len(request.Buffer),
@@ -104,13 +105,13 @@ func (this *BlockService) Write(stream BlockService_WriteServer) error {
 		return err
 	}
 
-	glog.V(2).Infof("Completed write request - wrote %d bytes", totalWritten)
+	glog.V(logging.LogLevelTrace).Infof("Completed write request - wrote %d bytes", totalWritten)
 
 	return nil
 }
 
 func (this *BlockService) Read(request *ReadRequest, stream BlockService_ReadServer) error {
-	glog.V(1).Infof("Read - volumeId: %s blockId: %s", request.VolumeId, request.BlockId)
+	glog.V(logging.LogLevelDebug).Infof("Read - volumeId: %s blockId: %s", request.VolumeId, request.BlockId)
 
 	volumeId := request.VolumeId
 	pv, ok := this.volumeIdx[volumeId]
@@ -160,9 +161,9 @@ func (this *BlockService) Read(request *ReadRequest, stream BlockService_ReadSer
 		}
 	}
 
-	glog.V(1).Infof("Read complete - %s", request.BlockId)
+	glog.V(logging.LogLevelDebug).Infof("Read complete - %s", request.BlockId)
 
-	if glog.V(2) {
+	if glog.V(logging.LogLevelTrace) {
 		glog.Infof("Performance: %f bytes/read - readCalls: %d sendCalls: %d requestChunkSize: %d actualChunkSize: %d",
 			float64(totalRead)/float64(readCalls),
 			readCalls,
@@ -176,7 +177,7 @@ func (this *BlockService) Read(request *ReadRequest, stream BlockService_ReadSer
 }
 
 func (this *BlockService) Delete(context context.Context, request *ReadRequest) (*DeleteResponse, error) {
-	glog.V(1).Infof(
+	glog.V(logging.LogLevelDebug).Infof(
 		"Delete request received - volumeId: %s blockId: %s",
 		request.VolumeId,
 		request.BlockId,
@@ -199,7 +200,7 @@ func (this *BlockService) Delete(context context.Context, request *ReadRequest) 
 		Status:   Status_SUCCESS,
 	}
 
-	glog.V(1).Infof("Delete request complete - %v", response)
+	glog.V(logging.LogLevelDebug).Infof("Delete request complete - %v", response)
 
 	return response, nil
 }

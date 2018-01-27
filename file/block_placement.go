@@ -2,6 +2,7 @@ package file
 
 import (
 	"bfs/config"
+	"bfs/util/logging"
 	"container/ring"
 	"fmt"
 	"github.com/golang/glog"
@@ -96,16 +97,16 @@ func NewLabelAwarePlacementPolicy(volumeConfigs []*config.PhysicalVolumeConfig, 
 			ringIndex[labelValue] = newNode
 
 			if this.ring == nil {
-				glog.V(2).Infof("Add root ring - %v", pvConfig)
+				glog.V(logging.LogLevelTrace).Infof("Add root ring - %v", pvConfig)
 				this.ring = &ring.Ring{Value: newNode}
 			} else {
-				glog.V(2).Infof("Append root ring current %v - %v", this.ring.Value.(*ring.Ring).Value, pvConfig)
+				glog.V(logging.LogLevelTrace).Infof("Append root ring current %v - %v", this.ring.Value.(*ring.Ring).Value, pvConfig)
 				oldRoot := this.ring
 				this.ring.Link(&ring.Ring{Value: newNode})
 				this.ring = oldRoot.Next()
 			}
 		} else {
-			glog.V(2).Infof("Append entry current %v - %v", val.Value, pvConfig)
+			glog.V(logging.LogLevelTrace).Infof("Append entry current %v - %v", val.Value, pvConfig)
 			val.Link(newNode).Next()
 			ringIndex[labelValue] = newNode
 		}

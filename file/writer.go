@@ -6,6 +6,7 @@ import (
 	"bfs/lru"
 	"bfs/nameservice"
 	"bfs/util"
+	"bfs/util/logging"
 	"context"
 	"github.com/golang/glog"
 	"io"
@@ -46,7 +47,7 @@ type LocalFileWriter struct {
 func NewWriter(nameClient nameservice.NameServiceClient, clientFactory *lru.LRUCache,
 	placementPolicy BlockPlacementPolicy, filename string, blockSize int) (*LocalFileWriter, error) {
 
-	glog.V(2).Infof("Allocate writer for %v with blockSize %d", filename, blockSize)
+	glog.V(logging.LogLevelTrace).Infof("Allocate writer for %v with blockSize %d", filename, blockSize)
 
 	return &LocalFileWriter{
 		nameClient:      nameClient,
@@ -98,7 +99,7 @@ func (this *LocalFileWriter) Write(buffer []byte) (int, error) {
 				this.writeStream = writeStream
 			}
 
-			glog.V(1).Infof("Allocated new block %d on %s - filePos: %d", this.blockCount, this.selectedPv, this.filePos)
+			glog.V(logging.LogLevelDebug).Infof("Allocated new block %d on %s - filePos: %d", this.blockCount, this.selectedPv, this.filePos)
 		}
 
 		// Decide how much of the buffer to write.
@@ -110,7 +111,7 @@ func (this *LocalFileWriter) Write(buffer []byte) (int, error) {
 
 		// If there's data left to write, write it.
 		if writeLen > 0 {
-			glog.V(2).Infof("Write %d:%d of %d bytes to %v on %s", bufferPos, bufferPos+writeLen, len(buffer),
+			glog.V(logging.LogLevelTrace).Infof("Write %d:%d of %d bytes to %v on %s", bufferPos, bufferPos+writeLen, len(buffer),
 				this.filename, this.selectedPv)
 
 			if err := this.writeStream.Send(&blockservice.WriteRequest{
@@ -142,7 +143,7 @@ func (this *LocalFileWriter) Write(buffer []byte) (int, error) {
 // read performance. If no block is currently open for write, calling this
 // method has no effect.
 func (this *LocalFileWriter) Flush() error {
-	glog.V(1).Infof("Flush writer for %s", this.filename)
+	glog.V(logging.LogLevelDebug).Infof("Flush writer for %s", this.filename)
 
 	// If a write stream is still open, close the block.
 	if this.writeStream != nil {
@@ -162,14 +163,14 @@ func (this *LocalFileWriter) Flush() error {
 		this.blockList = append(this.blockList, blockMetadata)
 		this.writeStream = nil
 
-		glog.V(2).Infof("Received block writer response: %v blockMetadata: %v", response, blockMetadata)
+		glog.V(logging.LogLevelTrace).Infof("Received block writer response: %v blockMetadata: %v", response, blockMetadata)
 	}
 
 	return nil
 }
 
 func (this *LocalFileWriter) Close() error {
-	glog.V(1).Infof("Closing writer for file %v.", this.filename)
+	glog.V(logging.LogLevelDebug).Infof("Closing writer for file %v.", this.filename)
 
 	if err := this.Flush(); err != nil {
 		return err
@@ -195,7 +196,7 @@ func (this *LocalFileWriter) Close() error {
 		return err
 	}
 
-	glog.V(1).Infof("Closed writer for %s. Wrote %d bytes to %d blocks", this.filename, this.filePos, this.blockCount)
+	glog.V(logging.LogLevelDebug).Infof("Closed writer for %s. Wrote %d bytes to %d blocks", this.filename, this.filePos, this.blockCount)
 
 	return nil
 }

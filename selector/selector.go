@@ -1,6 +1,7 @@
 package selector
 
 import (
+	"bfs/util/logging"
 	"container/list"
 	"fmt"
 	"github.com/golang/glog"
@@ -31,12 +32,12 @@ func ParseSelector(expression string) (*Selector, error) {
 	predicates := make([]Predicate, 0, 3)
 	i := 0
 
-	glog.V(2).Infof("Tokens: %+v", tokens)
+	glog.V(logging.LogLevelTrace).Infof("Tokens: %+v", tokens)
 
 	for stateStack.Len() > 0 {
 		state := stateStack.Remove(stateStack.Front())
 
-		glog.V(2).Infof("position: %d state: %d predicates: %#v", i, state, predicates)
+		glog.V(logging.LogLevelTrace).Infof("position: %d state: %d predicates: %#v", i, state, predicates)
 
 		switch state {
 		case 0:
@@ -138,23 +139,23 @@ func ParseSelector(expression string) (*Selector, error) {
 		}
 	}
 
-	glog.V(2).Infof("Predicates: %#v", predicates)
+	glog.V(logging.LogLevelTrace).Infof("Predicates: %#v", predicates)
 
 	return &Selector{Expression: expression, Predicates: predicates}, nil
 }
 
 func (this *Selector) Evaluate(labels map[string]string) bool {
-	glog.V(2).Infof("Evaluate expression: %s against labels: %v", this.Expression, labels)
+	glog.V(logging.LogLevelTrace).Infof("Evaluate expression: %s against labels: %v", this.Expression, labels)
 
 	for _, predicate := range this.Predicates {
 		matches := 0
 
 		for key, value := range labels {
 			if predicate.Evaluate(key, value) {
-				glog.V(2).Infof("Matched label: %s %s", key, value)
+				glog.V(logging.LogLevelTrace).Infof("Matched label: %s %s", key, value)
 				matches++
 			} else {
-				glog.V(2).Infof("No match for label: %s %s", key, value)
+				glog.V(logging.LogLevelTrace).Infof("No match for label: %s %s", key, value)
 			}
 		}
 
@@ -163,7 +164,7 @@ func (this *Selector) Evaluate(labels map[string]string) bool {
 		}
 	}
 
-	glog.V(2).Info("Selector matches")
+	glog.V(logging.LogLevelTrace).Info("Selector matches")
 
 	return true
 }

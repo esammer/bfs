@@ -2,6 +2,7 @@ package client
 
 import (
 	"bfs/test"
+	"bfs/util/logging"
 	"context"
 	"errors"
 	"fmt"
@@ -67,12 +68,12 @@ func TestWatcher(t *testing.T) {
 		"/test-key",
 		true,
 		func(kv *mvccpb.KeyValue) error {
-			glog.V(2).Infof("Put key: %s = %s", string(kv.Key), string(kv.Value))
+			glog.V(logging.LogLevelTrace).Infof("Put key: %s = %s", string(kv.Key), string(kv.Value))
 			atomic.AddInt32(&putCalls, 1)
 			return nil
 		},
 		func(kv *mvccpb.KeyValue) error {
-			glog.V(2).Infof("Delete key: %s", string(kv.Key))
+			glog.V(logging.LogLevelTrace).Infof("Delete key: %s", string(kv.Key))
 			wg.Done()
 			if atomic.AddInt32(&deleteCalls, 1) > 1 {
 				return errors.New("boom")
@@ -80,7 +81,7 @@ func TestWatcher(t *testing.T) {
 			return nil
 		},
 		func(err error) {
-			glog.V(2).Infof("Complete with error: %v", err)
+			glog.V(logging.LogLevelTrace).Infof("Complete with error: %v", err)
 			atomic.AddInt32(&doneCalls, 1)
 		},
 		true,

@@ -3,6 +3,7 @@ package nameservice
 import (
 	"bfs/ns"
 	"bfs/test"
+	"bfs/util/logging"
 	"context"
 	"fmt"
 	"github.com/golang/glog"
@@ -42,7 +43,7 @@ func TestNameService(t *testing.T) {
 			glog.Errorf("RPC server failed - %v", err)
 		}
 
-		glog.V(1).Infof("RPC server complete")
+		glog.V(logging.LogLevelDebug).Infof("RPC server complete")
 	}()
 
 	conn, err := grpc.Dial("127.0.0.1:8084", grpc.WithBlock(), grpc.WithInsecure())
@@ -75,7 +76,7 @@ func TestNameService(t *testing.T) {
 				})
 				assert.NoError(t, err)
 
-				glog.V(2).Infof("Response %d: %v", i, addResp)
+				glog.V(logging.LogLevelTrace).Infof("Response %d: %v", i, addResp)
 				wg.Done()
 			}(i)
 		}
@@ -98,7 +99,7 @@ func TestNameService(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Len(t, getResp.Entry.Blocks, 2)
 
-				glog.V(2).Infof("Response %d: %v", i, getResp)
+				glog.V(logging.LogLevelTrace).Infof("Response %d: %v", i, getResp)
 				wg.Done()
 			}(i)
 		}
@@ -115,7 +116,7 @@ func TestNameService(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "no such entry")
 
-		glog.V(2).Infof("Response: %v", getResp)
+		glog.V(logging.LogLevelTrace).Infof("Response: %v", getResp)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
@@ -126,7 +127,7 @@ func TestNameService(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		glog.V(2).Infof("Response: %v", deleteResp)
+		glog.V(logging.LogLevelTrace).Infof("Response: %v", deleteResp)
 	})
 
 	t.Run("Rename", func(t *testing.T) {
@@ -139,7 +140,7 @@ func TestNameService(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, renameResp.Success)
 
-		glog.V(2).Infof("Response: %v", renameResp)
+		glog.V(logging.LogLevelTrace).Infof("Response: %v", renameResp)
 
 		_, err = serviceClient.Get(context.Background(), &GetRequest{
 			Path: "/test2.txt",

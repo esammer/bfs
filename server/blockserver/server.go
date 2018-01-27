@@ -3,6 +3,7 @@ package blockserver
 import (
 	"bfs/blockservice"
 	"bfs/config"
+	"bfs/util/logging"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 )
@@ -22,7 +23,7 @@ func New(config *config.BlockServiceConfig, server *grpc.Server) *BlockServer {
 }
 
 func (this *BlockServer) Start() error {
-	glog.V(1).Infof("Starting block server %s", this.Config.BindAddress)
+	glog.V(logging.LogLevelDebug).Infof("Starting block server %s", this.Config.BindAddress)
 
 	this.PhysicalVolumes = make([]*blockservice.PhysicalVolume, 0, len(this.Config.VolumeConfigs))
 
@@ -42,13 +43,13 @@ func (this *BlockServer) Start() error {
 	blockService := blockservice.New(this.PhysicalVolumes)
 	blockservice.RegisterBlockServiceServer(this.server, blockService)
 
-	glog.V(1).Infof("Started block server %s", this.Config.BindAddress)
+	glog.V(logging.LogLevelDebug).Infof("Started block server %s", this.Config.BindAddress)
 
 	return nil
 }
 
 func (this *BlockServer) Stop() error {
-	glog.V(1).Infof("Stopping block server %s", this.Config.BindAddress)
+	glog.V(logging.LogLevelDebug).Infof("Stopping block server %s", this.Config.BindAddress)
 
 	for _, pv := range this.PhysicalVolumes {
 		if err := pv.Close(); err != nil {
@@ -56,7 +57,7 @@ func (this *BlockServer) Stop() error {
 		}
 	}
 
-	glog.V(1).Infof("Stopped block server %s", this.Config.BindAddress)
+	glog.V(logging.LogLevelDebug).Infof("Stopped block server %s", this.Config.BindAddress)
 
 	return nil
 }

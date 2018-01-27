@@ -3,6 +3,7 @@ package file
 import (
 	"bfs/blockservice"
 	"bfs/nameservice"
+	"bfs/util/logging"
 	"bfs/util/size"
 	"context"
 	"github.com/golang/glog"
@@ -47,7 +48,7 @@ func NewReader(nameClient nameservice.NameServiceClient, blockClient blockservic
 }
 
 func (this *LocalFileReader) Open() error {
-	glog.V(1).Infof("Opening reader for %s", this.filename)
+	glog.V(logging.LogLevelDebug).Infof("Opening reader for %s", this.filename)
 
 	resp, err := this.nameClient.Get(context.Background(), &nameservice.GetRequest{
 		Path: this.filename,
@@ -57,7 +58,7 @@ func (this *LocalFileReader) Open() error {
 	}
 
 	// Set up reader state.
-	glog.V(2).Infof("Entry: %v", resp.Entry)
+	glog.V(logging.LogLevelTrace).Infof("Entry: %v", resp.Entry)
 	this.entry = resp.Entry
 	this.blockIdx = 0
 
@@ -70,7 +71,7 @@ func (this *LocalFileReader) Open() error {
 }
 
 func (this *LocalFileReader) Read(buffer []byte) (int, error) {
-	glog.V(2).Infof("Read up to %d bytes from %s", len(buffer), this.filename)
+	glog.V(logging.LogLevelTrace).Infof("Read up to %d bytes from %s", len(buffer), this.filename)
 
 	totalRead := 0
 	this.readCalls++
@@ -79,7 +80,7 @@ func (this *LocalFileReader) Read(buffer []byte) (int, error) {
 		this.readLoopIters++
 
 		if this.blockReader == nil {
-			glog.V(2).Infof("Opening block reader %d for block %v", this.blockIdx, this.entry.Blocks[this.blockIdx])
+			glog.V(logging.LogLevelTrace).Infof("Opening block reader %d for block %v", this.blockIdx, this.entry.Blocks[this.blockIdx])
 
 			blockEntry := this.entry.Blocks[this.blockIdx]
 
@@ -102,7 +103,7 @@ func (this *LocalFileReader) Read(buffer []byte) (int, error) {
 			this.blockPos = 0
 			this.receiveCalls++
 
-			glog.V(2).Info("Receiving new chunk from block service")
+			glog.V(logging.LogLevelTrace).Info("Receiving new chunk from block service")
 
 			readResp, err := this.blockReader.Recv()
 
@@ -111,7 +112,7 @@ func (this *LocalFileReader) Read(buffer []byte) (int, error) {
 					return totalRead, err
 				}
 
-				glog.V(2).Info("Detected block EOF")
+				glog.V(logging.LogLevelTrace).Info("Detected block EOF")
 				if err := this.blockReader.CloseSend(); err != nil {
 					return totalRead, err
 				}
@@ -120,7 +121,7 @@ func (this *LocalFileReader) Read(buffer []byte) (int, error) {
 				this.blockReader = nil
 
 				if this.blockIdx >= len(this.entry.Blocks) {
-					glog.V(2).Info("Detected file EOF")
+					glog.V(logging.LogLevelTrace).Info("Detected file EOF")
 					return totalRead, io.EOF
 				} else {
 					continue
@@ -130,7 +131,7 @@ func (this *LocalFileReader) Read(buffer []byte) (int, error) {
 			this.blockBuf = readResp.Buffer
 		}
 
-		glog.V(2).Infof("Read buffer: %d/%d, Block buffer %d/%d",
+		glog.V(logging.LogLevelTrace).Infof("Read buffer: %d/%d, Block buffer %d/%d",
 			totalRead, len(buffer), this.blockPos, len(this.blockBuf))
 
 		readMax := len(buffer[totalRead:])
@@ -149,10 +150,10 @@ func (this *LocalFileReader) Read(buffer []byte) (int, error) {
 			totalRead += amountRead
 		} else {
 			if this.blockPos >= len(this.blockBuf) {
-				glog.V(2).Info("Exhausted block buffer")
+				glog.V(logging.LogLevelTrace).Info("Exhausted block buffer")
 				this.blockBuf = nil
 			} else {
-				glog.V(2).Info("Exhausted read buffer")
+				glog.V(logging.LogLevelTrace).Info("Exhausted read buffer")
 				break
 			}
 		}
@@ -162,9 +163,9 @@ func (this *LocalFileReader) Read(buffer []byte) (int, error) {
 }
 
 func (this *LocalFileReader) Close() error {
-	glog.V(1).Infof("Closing reader for %s", this.filename)
+	glog.V(logging.LogLevelDebug).Infof("Closing reader for %s", this.filename)
 
-	if glog.V(2) {
+	if glog.V(logging.LogLevelTrace) {
 		blockCount := len(this.entry.Blocks)
 
 		glog.Infof(

@@ -2,6 +2,7 @@ package blockservice
 
 import (
 	"bfs/test"
+	"bfs/util/logging"
 	"bytes"
 	"context"
 	"github.com/golang/glog"
@@ -54,13 +55,13 @@ func TestBlockService_Read(t *testing.T) {
 	RegisterBlockServiceServer(server, blockService)
 
 	go func() {
-		glog.V(1).Info("RPC server starting")
+		glog.V(logging.LogLevelDebug).Info("RPC server starting")
 
 		listener, err := net.Listen("tcp", bindAddress)
 		require.NoError(t, err)
 		require.NoError(t, server.Serve(listener))
 
-		glog.V(1).Info("RPC server stopped")
+		glog.V(logging.LogLevelDebug).Info("RPC server stopped")
 	}()
 
 	conn, err := grpc.Dial(bindAddress, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithWriteBufferSize(1024*1024),
@@ -93,13 +94,13 @@ func TestBlockService_Read(t *testing.T) {
 		require.NoError(t, err)
 
 		if response != nil {
-			glog.V(2).Infof("Received write response: %v", response)
+			glog.V(logging.LogLevelTrace).Infof("Received write response: %v", response)
 
 			blocks = append(blocks, &blockVolumePair{response.BlockId, response.VolumeId})
 		}
 
 		if err == io.EOF {
-			glog.V(2).Info("Received EOF from writer response stream")
+			glog.V(logging.LogLevelTrace).Info("Received EOF from writer response stream")
 			break
 		} else if err != nil {
 			require.Fail(t, err.Error())
@@ -117,7 +118,7 @@ func TestBlockService_Read(t *testing.T) {
 
 		go func(i int) {
 			lockId := <-sem
-			glog.V(2).Infof("Client %d acquired lock %d", i, lockId)
+			glog.V(logging.LogLevelTrace).Infof("Client %d acquired lock %d", i, lockId)
 
 			blockSelection := blocks[rand.Intn(len(blocks))]
 
@@ -136,7 +137,7 @@ func TestBlockService_Read(t *testing.T) {
 				response, err := readStream.Recv()
 
 				if response != nil {
-					glog.V(2).Infof(
+					glog.V(logging.LogLevelTrace).Infof(
 						"Received response - volumeId: %v, blockId: %v, buffer len: %d",
 						response.VolumeId,
 						response.BlockId,
@@ -159,7 +160,7 @@ func TestBlockService_Read(t *testing.T) {
 
 	wg.Wait()
 
-	glog.V(1).Infof("All clients complete")
+	glog.V(logging.LogLevelDebug).Infof("All clients complete")
 }
 
 func TestBlockService_Delete(t *testing.T) {

@@ -1,6 +1,7 @@
 package selector
 
 import (
+	"bfs/util/logging"
 	"github.com/golang/glog"
 )
 
@@ -10,7 +11,7 @@ type InPredicate struct {
 }
 
 func (this *InPredicate) Evaluate(key string, value string) bool {
-	glog.V(2).Infof("Evaluate in expression: %s %#v", this.Key, this.Values)
+	glog.V(logging.LogLevelTrace).Infof("Evaluate in expression: %s %#v", this.Key, this.Values)
 
 	if this.Key == key {
 		for _, v := range this.Values {

@@ -6,6 +6,7 @@ import (
 	"bfs/config"
 	"bfs/server/blockserver"
 	"bfs/server/nameserver"
+	"bfs/util/logging"
 	"bfs/util/size"
 	"context"
 	"errors"
@@ -110,7 +111,7 @@ func (this *BFSServer) configure() error {
 			}
 		}
 
-		glog.V(1).Infof("Configure volume path %s auto-initialize: %t labels: %v", components[0], allowAutoInit, labels)
+		glog.V(logging.LogLevelDebug).Infof("Configure volume path %s auto-initialize: %t labels: %v", components[0], allowAutoInit, labels)
 
 		pvConfigs = append(pvConfigs, &config.PhysicalVolumeConfig{
 			Path:                components[0],
@@ -150,10 +151,10 @@ func (this *BFSServer) configure() error {
 
 		hostConfig.Id = hostname
 		hostConfig.Hostname = hostname
-		glog.V(2).Infof("No host id specified - discovered hostname %s", hostname)
+		glog.V(logging.LogLevelTrace).Infof("No host id specified - discovered hostname %s", hostname)
 	} else {
 		hostConfig.Hostname = hostConfig.Id
-		glog.V(2).Infof("Using host id %s as host identity", hostConfig.Id)
+		glog.V(logging.LogLevelTrace).Infof("Using host id %s as host identity", hostConfig.Id)
 	}
 
 	hostConfig.NameServiceConfig = nsConfig
@@ -188,13 +189,13 @@ func (this *BFSServer) start() error {
 
 	// Start keep alive process
 	go func() {
-		glog.V(2).Infof("Keep alive process starting")
+		glog.V(logging.LogLevelTrace).Infof("Keep alive process starting")
 
 		for pulse := range keepAliveChan {
 			glog.V(3).Infof("Pulse: lease id: %v ttl: %d", pulse.ID, pulse.TTL)
 		}
 
-		glog.V(2).Info("Keep alive process complete")
+		glog.V(logging.LogLevelTrace).Info("Keep alive process complete")
 	}()
 
 	rpcServer := grpc.NewServer()
@@ -600,7 +601,7 @@ func (this *BFSClient) Run() error {
 		return fmt.Errorf("unknown command %s", clientArgs[0])
 	}
 
-	glog.V(2).Infof("Client memory footprint: ~%.02fKB", float64(cli.Stats())/1024.0)
+	glog.V(logging.LogLevelTrace).Infof("Client memory footprint: ~%.02fKB", float64(cli.Stats())/1024.0)
 
 	return nil
 }

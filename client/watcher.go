@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bfs/util/logging"
 	"context"
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"
@@ -71,12 +72,12 @@ func NewWatcher(client *clientv3.Client, key string, initialGet bool, putFunc Ev
 }
 
 func (this *Watcher) Start() error {
-	glog.V(2).Infof("Starting watcher for %s", this.key)
+	glog.V(logging.LogLevelTrace).Infof("Starting watcher for %s", this.key)
 
 	var rev int64
 
 	if this.initialGet {
-		glog.V(2).Infof("Doing initial get of %s", this.key)
+		glog.V(logging.LogLevelTrace).Infof("Doing initial get of %s", this.key)
 
 		resp, err := this.client.Get(context.Background(), this.key, this.watchOps...)
 		if err != nil {
@@ -90,14 +91,14 @@ func (this *Watcher) Start() error {
 		}
 
 		rev = resp.Header.Revision
-		glog.V(2).Infof("Finished initial get of %s @ %d", this.key, rev)
+		glog.V(logging.LogLevelTrace).Infof("Finished initial get of %s @ %d", this.key, rev)
 
 		rev++
 	}
 
 	go func() {
 		for this.shouldRun.Load() == true {
-			glog.V(2).Infof("Starting watcher process for %s @ %d", this.key, rev)
+			glog.V(logging.LogLevelTrace).Infof("Starting watcher process for %s @ %d", this.key, rev)
 
 			ctx, cancelFunc := context.WithCancel(context.Background())
 			this.watchCancelFunc = cancelFunc
@@ -158,7 +159,7 @@ func (this *Watcher) Start() error {
 			}
 		}
 
-		glog.V(2).Infof("Finished watcher process for %s", this.key)
+		glog.V(logging.LogLevelTrace).Infof("Finished watcher process for %s", this.key)
 		this.doneChan <- true
 	}()
 
@@ -166,7 +167,7 @@ func (this *Watcher) Start() error {
 }
 
 func (this *Watcher) Stop() {
-	glog.V(2).Infof("Stopping watcher for %s", this.key)
+	glog.V(logging.LogLevelTrace).Infof("Stopping watcher for %s", this.key)
 
 	this.shouldRun.Store(false)
 
@@ -176,5 +177,5 @@ func (this *Watcher) Stop() {
 
 	<-this.doneChan
 
-	glog.V(2).Infof("Stopped watcher for %s", this.key)
+	glog.V(logging.LogLevelTrace).Infof("Stopped watcher for %s", this.key)
 }

@@ -1,6 +1,7 @@
 package ns
 
 import (
+	"bfs/util/logging"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -112,7 +113,7 @@ func New(path string) *Namespace {
 }
 
 func (this *Namespace) Open() error {
-	glog.V(1).Infof("Opening namespace at %v", this.path)
+	glog.V(logging.LogLevelDebug).Infof("Opening namespace at %v", this.path)
 
 	if this.state != namespaceStatus_INITIAL {
 		return fmt.Errorf("unable to open namespace from state %v", this.state)
@@ -131,7 +132,7 @@ func (this *Namespace) Open() error {
 	key := keyFor(dbPrefix_GlobalMetadata, "blockId")
 
 	if ok, err := this.db.Has(key, defaultReadOpts); ok {
-		glog.V(1).Info("Last blockId exists")
+		glog.V(logging.LogLevelDebug).Info("Last blockId exists")
 	} else if err != nil {
 		return err
 	} else {
@@ -139,7 +140,7 @@ func (this *Namespace) Open() error {
 			glog.Errorf("Failed to set initial blockId for the namespace - %v", err)
 			return err
 		} else {
-			glog.V(1).Info("Initialized blockId for the namespace")
+			glog.V(logging.LogLevelDebug).Info("Initialized blockId for the namespace")
 		}
 	}
 
@@ -149,7 +150,7 @@ func (this *Namespace) Open() error {
 }
 
 func (this *Namespace) Add(entry *Entry) error {
-	glog.V(1).Infof("Adding entry %#v", entry)
+	glog.V(logging.LogLevelDebug).Infof("Adding entry %#v", entry)
 
 	if this.state != namespaceStatus_OPEN {
 		return fmt.Errorf("unable to perform operation in state %v", this.state)
@@ -163,7 +164,7 @@ func (this *Namespace) Add(entry *Entry) error {
 
 	key := keyFor(dbPrefix_Entry, entry.Path)
 
-	glog.V(2).Infof("Serialized to entry: %v", string(value))
+	glog.V(logging.LogLevelTrace).Infof("Serialized to entry: %v", string(value))
 
 	if err = this.db.Put(key, value, defaultWriteOpts); err != nil {
 		return err
@@ -177,7 +178,7 @@ func (this *Namespace) Add(entry *Entry) error {
 			return err
 		}
 
-		glog.V(2).Infof("Serialized block %v", string(value))
+		glog.V(logging.LogLevelTrace).Infof("Serialized block %v", string(value))
 		if err := this.db.Put(key, value, defaultWriteOpts); err != nil {
 			return err
 		}
@@ -187,7 +188,7 @@ func (this *Namespace) Add(entry *Entry) error {
 }
 
 func (this *Namespace) Get(path string) (*Entry, error) {
-	glog.V(1).Infof("Getting entry %v", path)
+	glog.V(logging.LogLevelDebug).Infof("Getting entry %v", path)
 
 	if this.state != namespaceStatus_OPEN {
 		return nil, fmt.Errorf("unable to perform operation in state %v", this.state)
@@ -213,7 +214,7 @@ func (this *Namespace) Get(path string) (*Entry, error) {
 }
 
 func (this *Namespace) List(from string, to string, visitor func(*Entry, error) (bool, error)) error {
-	glog.V(1).Infof("Listing entries from %v to %v", from, to)
+	glog.V(logging.LogLevelDebug).Infof("Listing entries from %v to %v", from, to)
 
 	if this.state != namespaceStatus_OPEN {
 		return fmt.Errorf("unable to perform operation in state %v", this.state)
@@ -248,7 +249,7 @@ func (this *Namespace) List(from string, to string, visitor func(*Entry, error) 
 			return err
 		}
 
-		glog.V(2).Infof("Entry: %#v", entry)
+		glog.V(logging.LogLevelTrace).Infof("Entry: %#v", entry)
 
 		if ok, err := visitor(&entry, nil); err != nil {
 			return err
@@ -263,7 +264,7 @@ func (this *Namespace) List(from string, to string, visitor func(*Entry, error) 
 }
 
 func (this *Namespace) Delete(path string, recursive bool) (uint32, error) {
-	glog.V(1).Infof("Deleting entry %s recursive: %t", path, recursive)
+	glog.V(logging.LogLevelDebug).Infof("Deleting entry %s recursive: %t", path, recursive)
 
 	if this.state != namespaceStatus_OPEN {
 		return 0, fmt.Errorf("unable to perform operation in state %v", this.state)
@@ -296,7 +297,7 @@ func (this *Namespace) Delete(path string, recursive bool) (uint32, error) {
 }
 
 func (this *Namespace) Rename(from string, to string) (bool, error) {
-	glog.V(1).Infof("Renaming entry %s to %s", from, to)
+	glog.V(logging.LogLevelDebug).Infof("Renaming entry %s to %s", from, to)
 
 	if this.state != namespaceStatus_OPEN {
 		return false, fmt.Errorf("unable to perform operation in state %v", this.state)
@@ -322,7 +323,7 @@ func (this *Namespace) Rename(from string, to string) (bool, error) {
 }
 
 func (this *Namespace) Close() error {
-	glog.V(1).Infof("Closing namespace at %v", this.path)
+	glog.V(logging.LogLevelDebug).Infof("Closing namespace at %v", this.path)
 
 	if this.state != namespaceStatus_OPEN {
 		return fmt.Errorf("unable to close namespace from state %v", this.state)

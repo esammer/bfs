@@ -7,6 +7,7 @@ import (
 	"bfs/lru"
 	"bfs/nameservice"
 	"bfs/util"
+	"bfs/util/logging"
 	"bfs/util/size"
 	"context"
 	"fmt"
@@ -97,7 +98,7 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 		filepath.Join(DefaultEtcdPrefix, EtcdVolumesPrefix),
 		true,
 		func(kv *mvccpb.KeyValue) error {
-			glog.V(2).Infof("Found volume: %s", string(kv.Key))
+			glog.V(logging.LogLevelTrace).Infof("Found volume: %s", string(kv.Key))
 
 			lvConfig := volumeConfigDeser(kv)
 
@@ -126,7 +127,7 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 		filepath.Join(DefaultEtcdPrefix, EtcdHostsPrefix),
 		true,
 		func(kv *mvccpb.KeyValue) error {
-			glog.V(2).Infof("Found host %s", string(kv.Key))
+			glog.V(logging.LogLevelTrace).Infof("Found host %s", string(kv.Key))
 
 			pathComponents := strings.Split(string(kv.Key), string(filepath.Separator))
 			if len(pathComponents) < 4 {
@@ -202,7 +203,7 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 	client.clientLRU = lru.NewCache(
 		2,
 		func(name string) (interface{}, error) {
-			glog.V(2).Infof("Creating new connection for %s", name)
+			glog.V(logging.LogLevelTrace).Infof("Creating new connection for %s", name)
 
 			ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 			conn, err := grpc.DialContext(ctx, name, grpc.WithBlock(), grpc.WithInsecure())
@@ -219,7 +220,7 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 			return c, nil
 		},
 		func(name string, value interface{}) error {
-			glog.V(2).Infof("Destroying connection for %s", name)
+			glog.V(logging.LogLevelTrace).Infof("Destroying connection for %s", name)
 
 			return value.(*util.ServiceCtx).Conn.Close()
 		},
@@ -242,7 +243,7 @@ func (this *Client) Create(path string, blockSize int) (file.Writer, error) {
 	for _, lvConfig := range this.clusterState.LogicalVolumeConfigs() {
 		mount := lvConfig.Labels["mount"]
 
-		glog.V(2).Infof("Checking volume mount %s for file %s", mount, path)
+		glog.V(logging.LogLevelTrace).Infof("Checking volume mount %s for file %s", mount, path)
 		if strings.HasPrefix(path, mount) {
 			pvConfigs = this.clusterState.PhysicalVolumesForLogicalVolume(lvConfig.Id)
 			break
@@ -359,7 +360,7 @@ func (this *Client) List(startKey string, endKey string) <-chan *nameservice.Ent
 
 	go func() {
 		for _, hostConfig := range this.clusterState.HostConfigs() {
-			glog.V(2).Infof("List on %s", hostConfig.Hostname)
+			glog.V(logging.LogLevelTrace).Infof("List on %s", hostConfig.Hostname)
 
 			o, err := this.clientLRU.Get(hostConfig.NameServiceConfig.AdvertiseAddress)
 			if err != nil {
@@ -370,7 +371,7 @@ func (this *Client) List(startKey string, endKey string) <-chan *nameservice.Ent
 
 			listStream, err := conn.NameServiceClient.List(context.Background(), &nameservice.ListRequest{StartKey: startKey, EndKey: endKey})
 			if err != nil {
-				glog.V(2).Infof("Closing list stream due to %v", err)
+				glog.V(logging.LogLevelTrace).Infof("Closing list stream due to %v", err)
 				close(iterChan)
 				return
 			}
@@ -378,10 +379,10 @@ func (this *Client) List(startKey string, endKey string) <-chan *nameservice.Ent
 			for {
 				resp, err := listStream.Recv()
 				if err == io.EOF {
-					glog.V(2).Infof("Finished list receive chunk")
+					glog.V(logging.LogLevelTrace).Infof("Finished list receive chunk")
 					break
 				} else if err != nil {
-					glog.V(2).Infof("Closing list stream due to %v", err)
+					glog.V(logging.LogLevelTrace).Infof("Closing list stream due to %v", err)
 					close(iterChan)
 					break
 				}
@@ -393,7 +394,7 @@ func (this *Client) List(startKey string, endKey string) <-chan *nameservice.Ent
 		}
 
 		close(iterChan)
-		glog.V(2).Infof("List stream complete")
+		glog.V(logging.LogLevelTrace).Infof("List stream complete")
 	}()
 
 	return iterChan
@@ -493,24 +494,24 @@ func (this *Client) blockAcceptFunc(node *file.ValueNode) bool {
 	//
 	// 1. Known to the system.
 	id := this.clusterState.HostId(node.LabelValue)
-	glog.V(2).Infof("Found host id: %s for label: %s", id, node.LabelValue)
+	glog.V(logging.LogLevelTrace).Infof("Found host id: %s for label: %s", id, node.LabelValue)
 	if len(id) == 0 {
-		glog.V(2).Infof("No configuration for host %s", node.LabelValue)
+		glog.V(logging.LogLevelTrace).Infof("No configuration for host %s", node.LabelValue)
 		return false
 	}
 
 	// 2. Alive and healthy.
 	hostStatus := this.clusterState.HostStat(id)
-	glog.V(2).Infof("Found host status: %v for id: %s", hostStatus, id)
+	glog.V(logging.LogLevelTrace).Infof("Found host status: %v for id: %s", hostStatus, id)
 	if hostStatus == nil {
-		glog.V(2).Infof("No status for host %s", node.LabelValue)
+		glog.V(logging.LogLevelTrace).Infof("No status for host %s", node.LabelValue)
 		return false
 	}
 
 	for _, volumeStatus := range hostStatus.VolumeStatus {
 		// 3. Have status info on the pvId in question.
 		if volumeStatus.Id == node.Value.Id {
-			glog.V(2).Infof("Found pv id: %s for id: %s", volumeStatus.Id, node.Value.Id)
+			glog.V(logging.LogLevelTrace).Infof("Found pv id: %s for id: %s", volumeStatus.Id, node.Value.Id)
 
 			fsStats := volumeStatus.FileSystemStatus
 			bytesAvailable := fsStats.BlocksAvailable * uint64(fsStats.BlockSize)
@@ -518,14 +519,14 @@ func (this *Client) blockAcceptFunc(node *file.ValueNode) bool {
 			// 4. Have enough space available.
 			gbAvail := size.Bytes(float64(bytesAvailable)).ToGigabytes()
 			if gbAvail >= 10 {
-				glog.V(2).Infof("Found enough space %.03fGB on %s", gbAvail, volumeStatus.Id)
+				glog.V(logging.LogLevelTrace).Infof("Found enough space %.03fGB on %s", gbAvail, volumeStatus.Id)
 				return true
 			}
 
-			glog.V(2).Infof("Not enough space %.03f on PV %s on host %s", gbAvail, node.Value.Id, node.LabelValue)
+			glog.V(logging.LogLevelTrace).Infof("Not enough space %.03f on PV %s on host %s", gbAvail, node.Value.Id, node.LabelValue)
 		}
 	}
 
-	glog.V(2).Infof("No PV %s on host %s", node.Value.Id, node.LabelValue)
+	glog.V(logging.LogLevelTrace).Infof("No PV %s on host %s", node.Value.Id, node.LabelValue)
 	return false
 }

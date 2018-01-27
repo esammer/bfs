@@ -2,6 +2,7 @@ package file
 
 import (
 	"bfs/config"
+	"bfs/util/logging"
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
@@ -58,6 +59,6 @@ func TestLabelAwarePlacementPolicy(t *testing.T) {
 			pvs[j] = selectedPVs[j].Id
 		}
 
-		glog.V(2).Infof("Request: %d - Selected: %v - Error: %v", i, pvs, err)
+		glog.V(logging.LogLevelTrace).Infof("Request: %d - Selected: %v - Error: %v", i, pvs, err)
 	}
 }

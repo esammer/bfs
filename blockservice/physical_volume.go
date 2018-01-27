@@ -1,6 +1,7 @@
 package blockservice
 
 import (
+	"bfs/util/logging"
 	"bfs/volumeutil"
 	"errors"
 	"fmt"
@@ -25,7 +26,7 @@ type PhysicalVolume struct {
 }
 
 func NewPhysicalVolume(rootPath string) *PhysicalVolume {
-	glog.V(1).Infof("Create physical volume at %v", rootPath)
+	glog.V(logging.LogLevelDebug).Infof("Create physical volume at %v", rootPath)
 
 	return &PhysicalVolume{
 		RootPath: rootPath,
