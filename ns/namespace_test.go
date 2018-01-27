@@ -219,7 +219,7 @@ func BenchmarkNamespace(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			deleted, err := ns.Delete(fmt.Sprintf("/b%d.txt", i), false)
 			require.NoError(b, err)
-			require.Equal(b, 1, deleted)
+			require.Equal(b, uint32(0), deleted)
 		}
 	})
 	b.Run("List", func(b *testing.B) {
