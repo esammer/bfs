@@ -10,10 +10,13 @@ PACKAGES = . \
 	$(PROJECT)/lru \
 	$(PROJECT)/nameservice \
 	$(PROJECT)/ns \
+	$(PROJECT)/ns/etcd \
 	$(PROJECT)/selector \
 	$(PROJECT)/server/blockserver \
 	$(PROJECT)/server/nameserver \
 	$(PROJECT)/test \
+	$(PROJECT)/util/fsm \
+	$(PROJECT)/util/logging \
 	$(PROJECT)/util/size \
 	$(PROJECT)/volumeutil
 PROJECT_DIRS = . \
@@ -25,10 +28,13 @@ PROJECT_DIRS = . \
 	lru \
 	nameservice \
 	ns \
+	ns/etcd \
 	selector \
 	server/blockserver \
 	server/nameserver \
 	test \
+	util/fsm \
+	util/logging \
 	util/size \
 	volumeutil
 PROTO_FILES = \
