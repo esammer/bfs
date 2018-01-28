@@ -26,7 +26,7 @@ func New(config *config.BlockServiceConfig, server *grpc.Server) *BlockServer {
 }
 
 func (this *BlockServer) Start() error {
-	glog.V(logging.LogLevelDebug).Infof("Starting block server %s:%d", this.bindAddress)
+	glog.V(logging.LogLevelDebug).Infof("Starting block server %s", this.bindAddress)
 
 	this.PhysicalVolumes = make([]*blockservice.PhysicalVolume, 0, len(this.Config.VolumeConfigs))
 
