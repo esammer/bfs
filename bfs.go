@@ -665,7 +665,13 @@ func main() {
 		err = fmt.Errorf("usage: %s <client | server> [command options...]", args[0])
 	}
 
-	if err != nil {
+	switch err {
+	case nil:
+		// No error.
+	case context.DeadlineExceeded:
+		glog.Errorf("Error: Command timed out")
+		os.Exit(1)
+	default:
 		glog.Errorf("Error: %s", err.Error())
 		os.Exit(1)
 	}
