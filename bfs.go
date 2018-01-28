@@ -394,7 +394,12 @@ func (this *BFSClient) Run() error {
 		}
 
 		resultChan := cli.List(startKey, endKey)
-		for entry := range resultChan {
+		for listEntry := range resultChan {
+			if listEntry.Err != nil {
+				return listEntry.Err
+			}
+
+			entry := listEntry.Entry
 			var sizeStr string
 
 			if *humanNumbers {

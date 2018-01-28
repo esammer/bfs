@@ -377,27 +377,16 @@ func (this *Client) Rename(sourcePath string, destinationPath string) error {
 	return nil
 }
 
-func (this *Client) List(startKey string, endKey string) <-chan *nameservice.Entry {
-	iterChan := make(chan *nameservice.Entry, 1024)
+func (this *Client) List(startKey string, endKey string) <-chan *ListEntry {
+	resultChan := make(chan *ListEntry, 1024)
 
 	go func() {
-		for _, hostConfig := range this.clusterState.HostConfigs() {
-			glog.V(logging.LogLevelTrace).Infof("List on %s", hostConfig.Hostname)
-
-			connectionAddress := fmt.Sprintf("%s:%d", hostConfig.NameServiceConfig.Hostname, hostConfig.NameServiceConfig.Port)
-
-			o, err := this.clientLRU.Get(connectionAddress)
-			if err != nil {
-				close(iterChan)
-				return
-			}
-			conn := o.(*util.ServiceCtx)
-
-			listStream, err := conn.NameServiceClient.List(context.Background(), &nameservice.ListRequest{StartKey: startKey, EndKey: endKey})
+		err := this.VisitNameShards(func(name string, conn nameservice.NameServiceClient) (bool, error) {
+			listStream, err := conn.List(context.Background(), &nameservice.ListRequest{StartKey: startKey, EndKey: endKey})
 			if err != nil {
 				glog.V(logging.LogLevelTrace).Infof("Closing list stream due to %v", err)
-				close(iterChan)
-				return
+				close(resultChan)
+				return false, err
 			}
 
 			for {
@@ -407,21 +396,32 @@ func (this *Client) List(startKey string, endKey string) <-chan *nameservice.Ent
 					break
 				} else if err != nil {
 					glog.V(logging.LogLevelTrace).Infof("Closing list stream due to %v", err)
-					close(iterChan)
-					break
+					close(resultChan)
+					return false, err
 				}
 
 				for _, entry := range resp.Entries {
-					iterChan <- entry
+					resultChan <- &ListEntry{Entry: entry}
 				}
 			}
+
+			return true, nil
+		})
+
+		if err != nil {
+			resultChan <- &ListEntry{Err: err}
 		}
 
-		close(iterChan)
+		close(resultChan)
 		glog.V(logging.LogLevelTrace).Infof("List stream complete")
 	}()
 
-	return iterChan
+	return resultChan
+}
+
+type ListEntry struct {
+	Entry *nameservice.Entry
+	Err   error
 }
 
 func (this *Client) CreateLogicalVolume(volumeConfig *config.LogicalVolumeConfig) error {
