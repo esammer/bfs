@@ -49,7 +49,7 @@ func (this *NameServer) Start() error {
 
 	ensc := &etcd.Config{
 		Path:    this.Config.Path,
-		GroupId: "ns-shard-1",
+		GroupId: this.Config.GroupId,
 		Self:    self,
 		Nodes:   convertedNodes,
 	}
