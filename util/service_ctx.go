@@ -1,8 +1,8 @@
 package util
 
 import (
-	"bfs/blockservice"
-	"bfs/nameservice"
+	"bfs/service/blockservice"
+	"bfs/service/nameservice"
 	"google.golang.org/grpc"
 )
 

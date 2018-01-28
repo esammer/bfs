@@ -3,17 +3,17 @@ GO = go
 DEP = dep
 PACKAGES = . \
 	$(PROJECT)/block \
-	$(PROJECT)/blockservice \
 	$(PROJECT)/client \
 	$(PROJECT)/config \
 	$(PROJECT)/file \
 	$(PROJECT)/lru \
-	$(PROJECT)/nameservice \
 	$(PROJECT)/ns \
 	$(PROJECT)/ns/etcd \
 	$(PROJECT)/selector \
 	$(PROJECT)/server/blockserver \
 	$(PROJECT)/server/nameserver \
+	$(PROJECT)/service/blockservice \
+	$(PROJECT)/service/nameservice \
 	$(PROJECT)/test \
 	$(PROJECT)/util/fsm \
 	$(PROJECT)/util/logging \
@@ -21,26 +21,26 @@ PACKAGES = . \
 	$(PROJECT)/volumeutil
 PROJECT_DIRS = . \
 	block \
-	blockservice \
 	client \
 	config \
 	file \
 	lru \
-	nameservice \
 	ns \
 	ns/etcd \
 	selector \
 	server/blockserver \
 	server/nameserver \
+	service/blockservice \
+	service/nameservice \
 	test \
 	util/fsm \
 	util/logging \
 	util/size \
 	volumeutil
 PROTO_FILES = \
-	blockservice/blockservice.pb.go \
 	config/config.pb.go \
-	nameservice/nameservice.pb.go
+	service/blockservice/blockservice.pb.go \
+	service/nameservice/nameservice.pb.go
 
 ifdef v
 VERBOSE = -v

@@ -2,7 +2,7 @@ package nameserver
 
 import (
 	"bfs/config"
-	"bfs/nameservice"
+	"bfs/service/nameservice"
 	"bfs/ns/etcd"
 	"bfs/util/logging"
 	"errors"

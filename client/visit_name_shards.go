@@ -1,7 +1,7 @@
 package client
 
 import (
-	"bfs/nameservice"
+	"bfs/service/nameservice"
 	"bfs/util"
 	"bfs/util/logging"
 	"fmt"

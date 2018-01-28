@@ -1,11 +1,11 @@
 package client
 
 import (
-	"bfs/blockservice"
+	"bfs/service/blockservice"
 	"bfs/config"
 	"bfs/file"
 	"bfs/lru"
-	"bfs/nameservice"
+	"bfs/service/nameservice"
 	"bfs/util"
 	"bfs/util/etcd"
 	"bfs/util/logging"

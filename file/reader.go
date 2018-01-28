@@ -1,8 +1,8 @@
 package file
 
 import (
-	"bfs/blockservice"
-	"bfs/nameservice"
+	"bfs/service/blockservice"
+	"bfs/service/nameservice"
 	"bfs/util/logging"
 	"bfs/util/size"
 	"context"

@@ -1,10 +1,10 @@
 package file
 
 import (
-	"bfs/blockservice"
+	"bfs/service/blockservice"
 	"bfs/config"
 	"bfs/lru"
-	"bfs/nameservice"
+	"bfs/service/nameservice"
 	"bfs/util"
 	"bfs/util/logging"
 	"context"

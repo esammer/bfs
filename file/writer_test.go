@@ -1,10 +1,10 @@
 package file
 
 import (
-	"bfs/blockservice"
+	"bfs/service/blockservice"
 	"bfs/config"
 	"bfs/lru"
-	"bfs/nameservice"
+	"bfs/service/nameservice"
 	"bfs/server/blockserver"
 	"bfs/server/nameserver"
 	"bfs/test"

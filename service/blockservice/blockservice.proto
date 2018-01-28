@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package blockservice;
 
-option go_package = "bfs/blockservice";
+option go_package = "bfs/service/blockservice";
 
 enum Status {
   UNKNOWN = 0;

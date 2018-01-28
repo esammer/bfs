@@ -1,7 +1,7 @@
 package blockserver
 
 import (
-	"bfs/blockservice"
+	"bfs/service/blockservice"
 	"bfs/config"
 	"bfs/util/logging"
 	"fmt"

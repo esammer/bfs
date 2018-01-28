@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bfs/blockservice"
+	"bfs/service/blockservice"
 	"bfs/client"
 	"bfs/config"
 	"bfs/server/blockserver"
