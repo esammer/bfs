@@ -7,6 +7,7 @@ import (
 	"bfs/lru"
 	"bfs/nameservice"
 	"bfs/util"
+	"bfs/util/etcd"
 	"bfs/util/logging"
 	"bfs/util/size"
 	"context"
@@ -31,8 +32,8 @@ type Client struct {
 
 	clusterState *ClusterState
 
-	volumeWatcher *Watcher
-	hostWatcher   *Watcher
+	volumeWatcher *etcd.Watcher
+	hostWatcher   *etcd.Watcher
 }
 
 func New(endpoints []string) (*Client, error) {
@@ -93,7 +94,7 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 		return hostStatus
 	}
 
-	client.volumeWatcher = NewWatcher(
+	client.volumeWatcher = etcd.NewWatcher(
 		etcdClient,
 		filepath.Join(DefaultEtcdPrefix, EtcdVolumesPrefix),
 		true,
@@ -122,7 +123,7 @@ func NewWithEtcd(etcdClient *clientv3.Client) (*Client, error) {
 		clientv3.WithPrefix(),
 	)
 
-	client.hostWatcher = NewWatcher(
+	client.hostWatcher = etcd.NewWatcher(
 		etcdClient,
 		filepath.Join(DefaultEtcdPrefix, EtcdHostsPrefix),
 		true,
