@@ -195,9 +195,9 @@ func (this *EtcdNamespace) Add(entry *ns.Entry) error {
 		return err
 	}
 
-	this.client.Put(context.Background(), entry.Path, string(jsonEntry))
+	_, err = this.client.Put(context.Background(), entry.Path, string(jsonEntry))
 
-	return nil
+	return err
 }
 
 func (this *EtcdNamespace) Get(path string) (*ns.Entry, error) {
