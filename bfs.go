@@ -61,8 +61,13 @@ type BFSServer struct {
 }
 
 func (this *BFSServer) Run() error {
-	this.configure()
-	this.start()
+	if err := this.configure(); err != nil {
+		return err
+	}
+
+	if err := this.start(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -209,10 +214,14 @@ func (this *BFSServer) start() error {
 	}
 
 	this.blockServer = blockserver.New(this.BlockServiceConfig, rpcServer)
-	this.blockServer.Start()
+	if err := this.blockServer.Start(); err != nil {
+		return err
+	}
 
 	this.nameServer = nameserver.New(this.NameServiceConfig, rpcServer)
-	this.nameServer.Start()
+	if err := this.nameServer.Start(); err != nil {
+		return err
+	}
 
 	// Register or update host config
 	_, err = etcdClient.Put(
