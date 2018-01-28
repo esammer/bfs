@@ -206,7 +206,7 @@ func (this *BFSServer) start() error {
 		glog.V(logging.LogLevelTrace).Infof("Keep alive process starting")
 
 		for pulse := range keepAliveChan {
-			glog.V(3).Infof("Pulse: lease id: %v ttl: %d", pulse.ID, pulse.TTL)
+			glog.V(4).Infof("Pulse: lease id: %v ttl: %d", pulse.ID, pulse.TTL)
 		}
 
 		glog.V(logging.LogLevelTrace).Info("Keep alive process complete")
