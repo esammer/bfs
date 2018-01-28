@@ -230,16 +230,18 @@ func (this *EtcdNamespace) List(prefix string, visitor func(*ns.Entry, error) (b
 		return err
 	}
 
+	var matchedEntries int64 = 0
 	getKey := prefix
 
 	for {
-		glog.V(logging.LogLevelDebug).Infof("List from key %s", getKey)
+		glog.V(logging.LogLevelTrace).Infof("List from key %s", getKey)
 
 		getResp, err := this.client.Get(context.Background(), getKey, clientv3.WithPrefix())
 		if err != nil {
 			return err
 		}
 
+		matchedEntries += getResp.Count
 		for _, kv := range getResp.Kvs {
 			entry := &ns.Entry{}
 			if err := json.Unmarshal(kv.Value, entry); err != nil {
@@ -253,12 +255,13 @@ func (this *EtcdNamespace) List(prefix string, visitor func(*ns.Entry, error) (b
 		}
 
 		if !getResp.More {
-			glog.V(logging.LogLevelDebug).Info("No more entries to get")
 			break
 		}
 	}
 
 	visitor(nil, io.EOF)
+
+	glog.V(logging.LogLevelTrace).Infof("List matched %d entries", matchedEntries)
 
 	return nil
 }
@@ -271,12 +274,12 @@ func (this *EtcdNamespace) Remove(path string, recursive bool) (int, error) {
 		ops = []clientv3.OpOption{clientv3.WithPrefix()}
 	}
 
-	glog.V(logging.LogLevelTrace).Infof("Ops: %v", ops)
-
 	resp, err := this.client.Delete(context.Background(), path, ops...)
 	if err != nil {
 		return 0, err
 	}
+
+	glog.V(logging.LogLevelTrace).Infof("Delete matched %d entries", resp.Deleted)
 
 	return int(resp.Deleted), nil
 }
