@@ -294,20 +294,41 @@ func (this *Client) Stat(path string) (*nameservice.Entry, error) {
 }
 
 func (this *Client) Remove(path string, recursive bool) (uint32, error) {
-	conn, _, err := this.connectionForPath(path)
-	if err != nil {
-		return 0, err
-	}
+	if recursive {
+		var deletedTotal uint32 = 0
 
-	resp, err := conn.NameServiceClient.Delete(
-		context.Background(),
-		&nameservice.DeleteRequest{Path: path, Recursive: recursive},
-	)
-	if err != nil {
-		return resp.EntriesDeleted, err
-	}
+		// Recursive deletes must be issued to all shards.
+		this.VisitNameShards(
+			func(name string, conn nameservice.NameServiceClient) (bool, error) {
+				resp, err := conn.Delete(
+					context.Background(),
+					&nameservice.DeleteRequest{Path: path, Recursive: recursive},
+				)
+				if err != nil {
+					glog.Warningf("Failed to issue delete on shard %s - %v", name, err)
+				}
 
-	return resp.EntriesDeleted, nil
+				deletedTotal += resp.EntriesDeleted
+				return true, nil
+			},
+		)
+
+		return deletedTotal, nil
+	} else {
+		conn, _, err := this.connectionForPath(path)
+		if err != nil {
+			return 0, err
+		}
+		resp, err := conn.NameServiceClient.Delete(
+			context.Background(),
+			&nameservice.DeleteRequest{Path: path, Recursive: recursive},
+		)
+		if err != nil {
+			return resp.EntriesDeleted, err
+		}
+
+		return resp.EntriesDeleted, nil
+	}
 }
 
 func (this *Client) Rename(sourcePath string, destinationPath string) error {
