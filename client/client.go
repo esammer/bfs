@@ -17,7 +17,6 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
-	"io"
 	"path/filepath"
 	"stathat.com/c/consistent"
 	"strings"
@@ -377,99 +376,6 @@ func (this *Client) Rename(sourcePath string, destinationPath string) error {
 	return nil
 }
 
-func (this *Client) List(startKey string, endKey string) <-chan *ListEntry {
-	resultChan := make(chan *ListEntry, 1024)
-
-	go func() {
-		err := this.VisitNameShards(func(name string, conn nameservice.NameServiceClient) (bool, error) {
-			listStream, err := conn.List(context.Background(), &nameservice.ListRequest{StartKey: startKey, EndKey: endKey})
-			if err != nil {
-				glog.V(logging.LogLevelTrace).Infof("Closing list stream due to %v", err)
-				close(resultChan)
-				return false, err
-			}
-
-			for {
-				resp, err := listStream.Recv()
-				if err == io.EOF {
-					glog.V(logging.LogLevelTrace).Infof("Finished list receive chunk")
-					break
-				} else if err != nil {
-					glog.V(logging.LogLevelTrace).Infof("Closing list stream due to %v", err)
-					close(resultChan)
-					return false, err
-				}
-
-				for _, entry := range resp.Entries {
-					resultChan <- &ListEntry{Entry: entry}
-				}
-			}
-
-			return true, nil
-		})
-
-		if err != nil {
-			resultChan <- &ListEntry{Err: err}
-		}
-
-		close(resultChan)
-		glog.V(logging.LogLevelTrace).Infof("List stream complete")
-	}()
-
-	return resultChan
-}
-
-type ListEntry struct {
-	Entry *nameservice.Entry
-	Err   error
-}
-
-func (this *Client) CreateLogicalVolume(volumeConfig *config.LogicalVolumeConfig) error {
-	_, err := this.etcdClient.Put(
-		context.Background(),
-		filepath.Join(DefaultEtcdPrefix, EtcdVolumesPrefix, volumeConfig.Id),
-		proto.MarshalTextString(volumeConfig),
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (this *Client) DeleteLogicalVolume(volumeId string) (bool, error) {
-	resp, err := this.etcdClient.Delete(
-		context.Background(),
-		filepath.Join(DefaultEtcdPrefix, EtcdVolumesPrefix, volumeId),
-	)
-
-	return resp.Deleted == 1, err
-}
-
-func (this *Client) ListVolumes() ([]*config.LogicalVolumeConfig, error) {
-	getResp, err := this.etcdClient.Get(
-		context.Background(),
-		filepath.Join(DefaultEtcdPrefix, EtcdVolumesPrefix),
-		clientv3.WithPrefix(),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	lvConfigs := make([]*config.LogicalVolumeConfig, len(getResp.Kvs))
-
-	for i, kv := range getResp.Kvs {
-		lvConfig := &config.LogicalVolumeConfig{}
-		if err := proto.UnmarshalText(string(kv.Value), lvConfig); err != nil {
-			return nil, err
-		}
-
-		lvConfigs[i] = lvConfig
-	}
-
-	return lvConfigs, nil
-}
-
 func (this *Client) Stats() uintptr {
 	var byteSize uintptr = 0
 	byteSize += unsafe.Sizeof(config.HostConfig{}) * uintptr(len(this.clusterState.HostConfigs()))
@@ -492,39 +398,6 @@ func (this *Client) Close() error {
 
 	if this.etcdClient != nil {
 		if err := this.etcdClient.Close(); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// A name shard visitor callback.
-//
-// This visitor is invoked for each name service in the configured cluster. Visitors can return true if they wish to
-// continue being called for more shards or false to terminate early. If the visitor returns an error, no additional
-// shards will be visited; the bool argument is ignored when an error is present.
-type ShardVisitor func(name string, conn nameservice.NameServiceClient) (bool, error)
-
-// Visit each name shard with the given visitor function.
-//
-// See ShardVisitor for more information.
-func (this *Client) VisitNameShards(visitor ShardVisitor) error {
-	for _, hostConfig := range this.clusterState.HostConfigs() {
-		glog.V(logging.LogLevelTrace).Infof("Visit shard %s with %v", hostConfig.Hostname, visitor)
-
-		connectionAddress := fmt.Sprintf("%s:%d", hostConfig.NameServiceConfig.Hostname, hostConfig.NameServiceConfig.Port)
-
-		o, err := this.clientLRU.Get(connectionAddress)
-		if err != nil {
-			return err
-		}
-
-		conn := o.(*util.ServiceCtx)
-
-		keepGoing, err := visitor(hostConfig.Hostname, conn.NameServiceClient)
-		if !keepGoing || err != nil {
-			glog.V(logging.LogLevelTrace).Infof("Visit terminating early - continue: %t err: %v", keepGoing, err)
 			return err
 		}
 	}
