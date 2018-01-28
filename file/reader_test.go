@@ -32,7 +32,10 @@ func TestLocalFileReader_Read(t *testing.T) {
 		testDir.Destroy()
 	}()
 
-	bindAddress := fmt.Sprintf("%s:%d", "localhost", 8084)
+	rpcPort := 8081
+	etcdPortBase := 7004
+
+	bindAddress := fmt.Sprintf("%s:%d", "localhost", rpcPort)
 
 	rpcServer := grpc.NewServer(
 		grpc.WriteBufferSize(size.MB*8),
@@ -45,7 +48,7 @@ func TestLocalFileReader_Read(t *testing.T) {
 	blockServer := blockserver.New(
 		&config.BlockServiceConfig{
 			Hostname: "localhost",
-			Port:     8084,
+			Port:     int32(rpcPort),
 			VolumeConfigs: []*config.PhysicalVolumeConfig{
 				{Path: filepath.Join(testDir.Path, "pv1"), AllowAutoInitialize: true, Labels: map[string]string{}},
 				{Path: filepath.Join(testDir.Path, "pv2"), AllowAutoInitialize: true, Labels: map[string]string{}},
@@ -60,8 +63,13 @@ func TestLocalFileReader_Read(t *testing.T) {
 	nameServer := nameserver.New(
 		&config.NameServiceConfig{
 			Hostname: "localhost",
-			Port:     8084,
+			Port:     int32(rpcPort),
 			Path:     filepath.Join(testDir.Path, "ns"),
+			GroupId:  "ns-shard-1",
+			Nodes: []*config.NameServiceNodeConfig{
+				{Id: "localhost", Hostname: "localhost", BindAddress: "0.0.0.0", ClientPort: int32(etcdPortBase),
+					PeerPort: int32(etcdPortBase) + 1},
+			},
 		},
 		rpcServer,
 	)

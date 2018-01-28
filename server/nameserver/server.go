@@ -3,34 +3,62 @@ package nameserver
 import (
 	"bfs/config"
 	"bfs/nameservice"
-	"bfs/ns"
+	"bfs/ns/etcd"
 	"bfs/util/logging"
+	"errors"
 	"fmt"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 )
 
 type NameServer struct {
-	Config      *config.NameServiceConfig
-	server      *grpc.Server
-	bindAddress string
+	Config *config.NameServiceConfig
 
-	namespace   *ns.Namespace
+	server *grpc.Server
+
+	namespace   *etcd.EtcdNamespace
 	nameService *nameservice.NameService
 }
 
 func New(conf *config.NameServiceConfig, server *grpc.Server) *NameServer {
 	return &NameServer{
-		Config:      conf,
-		server:      server,
-		bindAddress: fmt.Sprintf("%s:%d", conf.Hostname, conf.Port),
+		Config: conf,
+		server: server,
 	}
 }
 
 func (this *NameServer) Start() error {
-	glog.V(logging.LogLevelDebug).Infof("Starting name server %s", this.bindAddress)
+	glog.V(logging.LogLevelDebug).Infof("Starting name server")
 
-	this.namespace = ns.New(this.Config.Path)
+	self := -1
+	convertedNodes := make([]*etcd.NsNode, len(this.Config.Nodes))
+
+	for i, node := range this.Config.Nodes {
+		if node.Hostname == this.Config.Hostname {
+			self = i
+		}
+
+		var converted etcd.NsNode
+		converted = etcd.NsNode(*node)
+		convertedNodes[i] = &converted
+	}
+
+	if self == -1 {
+		return fmt.Errorf("unable to find hostname %s in configured nodes", this.Config.Hostname)
+	}
+
+	ensc := &etcd.Config{
+		Path:    this.Config.Path,
+		GroupId: "ns-shard-1",
+		Self:    self,
+		Nodes:   convertedNodes,
+	}
+
+	this.namespace = etcd.New(ensc)
+	if this.namespace == nil {
+		return errors.New("unable to create namespace")
+	}
+
 	if err := this.namespace.Open(); err != nil {
 		return err
 	}
@@ -38,19 +66,19 @@ func (this *NameServer) Start() error {
 	this.nameService = &nameservice.NameService{Namespace: this.namespace}
 	nameservice.RegisterNameServiceServer(this.server, this.nameService)
 
-	glog.V(logging.LogLevelDebug).Infof("Started name server %s", this.bindAddress)
+	glog.V(logging.LogLevelDebug).Info("Started name server")
 
 	return nil
 }
 
 func (this *NameServer) Stop() error {
-	glog.V(logging.LogLevelDebug).Infof("Stopping name server %s", this.bindAddress)
+	glog.V(logging.LogLevelDebug).Info("Stopping name server")
 
 	if err := this.namespace.Close(); err != nil {
 		return err
 	}
 
-	glog.V(logging.LogLevelDebug).Infof("Stopped name server %s", this.bindAddress)
+	glog.V(logging.LogLevelDebug).Info("Stopped name server")
 
 	return nil
 }

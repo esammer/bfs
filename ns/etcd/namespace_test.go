@@ -25,7 +25,8 @@ func TestEtcdNamespace(t *testing.T) {
 		GroupId: "ns-shard-1",
 		Self:    0,
 		Nodes: []*NsNode{
-			{Id: "n1", Hostname: "localhost", PeerPort: 7000, ClientPort: 7001},
+			{Id: "localhost", Hostname: "localhost", BindAddress: "0.0.0.0", ClientPort: 7000,
+				PeerPort: 7001},
 		},
 	})
 
@@ -110,7 +111,7 @@ func TestEtcdNamespace(t *testing.T) {
 	assert.NoError(t, namespace.Close())
 }
 
-func BenchmarkNamespace(b *testing.B) {
+func BenchmarkEtcdNamespace(b *testing.B) {
 	testDir := test.New("build", "test", b.Name())
 	err := testDir.Create()
 	require.NoError(b, err)
@@ -120,7 +121,8 @@ func BenchmarkNamespace(b *testing.B) {
 		GroupId: "ns-shard-1",
 		Self:    0,
 		Nodes: []*NsNode{
-			{Id: "n1", Hostname: "localhost", PeerPort: 7000, ClientPort: 7001},
+			{Id: "localhost", Hostname: "localhost", BindAddress: "0.0.0.0", ClientPort: 7000,
+				PeerPort: 7001},
 		},
 	})
 

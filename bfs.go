@@ -73,22 +73,20 @@ func (this *BFSServer) Run() error {
 }
 
 func (this *BFSServer) configure() error {
-	hostConfig := &config.HostConfig{}
-	nsConfig := &config.NameServiceConfig{}
-	bsConfig := &config.BlockServiceConfig{}
-
 	var volumePaths ListValue
 	var allowAutoInit bool
 	var port int
 	var hostLabels ListValue
+	var nsPath string
+	var hostId string
 
 	serverFlags := flag.NewFlagSet("server", flag.ContinueOnError)
 	serverFlags.Var(&volumePaths, "volume", "physical volume directory (repeatable)")
 	serverFlags.BoolVar(&allowAutoInit, "auto-init", false, "allow auto-initialization of physical volumes")
 	serverFlags.BoolVar(&allowAutoInit, "a", false, "allow auto-initialization of physical volumes")
 	serverFlags.IntVar(&port, "port", 60000, "bind port")
-	serverFlags.StringVar(&nsConfig.Path, "ns", "", "namespace directory")
-	serverFlags.StringVar(&hostConfig.Id, "id", "", "node id")
+	serverFlags.StringVar(&nsPath, "ns", "", "namespace directory")
+	serverFlags.StringVar(&hostId, "id", "", "node id")
 	serverFlags.Var(&hostLabels, "label", "host labels")
 
 	flag.CommandLine.VisitAll(func(f *flag.Flag) {
@@ -132,43 +130,52 @@ func (this *BFSServer) configure() error {
 		parsedLabels[components[0]] = components[1]
 	}
 
-	if hostConfig.Id == "" {
+	var hostname string
+
+	if hostId == "" {
 		hostname, err := os.Hostname()
 		if err != nil {
 			return err
 		}
 
-		hostConfig.Id = hostname
-		hostConfig.Hostname = hostname
+		hostId = hostname
 		glog.V(logging.LogLevelTrace).Infof("No host id specified - discovered hostname %s", hostname)
 	} else {
-		hostConfig.Hostname = hostConfig.Id
-		glog.V(logging.LogLevelTrace).Infof("Using host id %s as host identity", hostConfig.Id)
+		hostname = hostId
+		glog.V(logging.LogLevelTrace).Infof("Using host id %s as host identity", hostId)
 	}
 
-	hostConfig.NameServiceConfig = nsConfig
-	hostConfig.BlockServiceConfig = bsConfig
-	hostConfig.Labels = parsedLabels
-	hostConfig.Port = int32(port)
+	bindIPs, err := net.LookupIP(hostname)
+	if err != nil {
+		return err
+	}
 
-	bsConfig.Hostname = hostConfig.Hostname
-	bsConfig.Port = hostConfig.Port
-	bsConfig.VolumeConfigs = pvConfigs
+	nsConfig := &config.NameServiceConfig{
+		Hostname: hostname,
+		GroupId:  "ns-shard-1",
+		Path:     nsPath,
+		Port:     int32(port),
+		Nodes: []*config.NameServiceNodeConfig{
+			{Id: hostId, Hostname: hostname, BindAddress: bindIPs[0].String(), ClientPort: 7000, PeerPort: 7001},
+		},
+	}
+	bsConfig := &config.BlockServiceConfig{
+		Hostname:      hostname,
+		Port:          int32(port),
+		VolumeConfigs: pvConfigs,
+	}
+	hostConfig := &config.HostConfig{
+		Id:                 hostId,
+		Hostname:           hostname,
+		Port:               int32(port),
+		Labels:             parsedLabels,
+		NameServiceConfig:  nsConfig,
+		BlockServiceConfig: bsConfig,
+	}
 
-	nsConfig.Hostname = hostConfig.Hostname
-	nsConfig.Port = hostConfig.Port
-
-	this.BlockServiceConfig = bsConfig
-	this.NameServiceConfig = nsConfig
 	this.HostConfig = hostConfig
-
-	if len(this.NameServiceConfig.Path) == 0 {
-		return errors.New("--ns is required")
-	}
-
-	if len(this.BlockServiceConfig.VolumeConfigs) == 0 {
-		return errors.New("at least one --volume is required")
-	}
+	this.NameServiceConfig = nsConfig
+	this.BlockServiceConfig = bsConfig
 
 	return nil
 }

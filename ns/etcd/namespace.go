@@ -2,6 +2,7 @@
 package etcd
 
 import (
+	"bfs/config"
 	"bfs/ns"
 	"bfs/util/fsm"
 	"bfs/util/logging"
@@ -41,12 +42,7 @@ type EtcdNamespace struct {
 }
 
 // A namespace node.
-type NsNode struct {
-	Id         string
-	Hostname   string
-	ClientPort int
-	PeerPort   int
-}
+type NsNode config.NameServiceNodeConfig
 
 // Returns the etcd client endpoint for this node.
 func (this *NsNode) ClientEndpoint() string {
@@ -56,6 +52,14 @@ func (this *NsNode) ClientEndpoint() string {
 // Returns the etcd peer endpoint for this node.
 func (this *NsNode) PeerEndpoint() string {
 	return fmt.Sprintf("http://%s:%d", this.Hostname, this.PeerPort)
+}
+
+func (this *NsNode) PeerBindEndpoint() string {
+	return fmt.Sprintf("http://%s:%d", this.BindAddress, this.PeerPort)
+}
+
+func (this *NsNode) ClientBindEndpoint() string {
+	return fmt.Sprintf("http://%s:%d", this.BindAddress, this.ClientPort)
 }
 
 // Returns the etcd bootstrap entry. (e.g. id1=http://localhost:2380)
@@ -97,7 +101,6 @@ func (this *Config) ClientEndpoints() []string {
 }
 
 func New(config *Config) *EtcdNamespace {
-
 	this := &EtcdNamespace{
 		config: config,
 		fsm:    stateFSM.NewInstance(),
@@ -111,19 +114,27 @@ func New(config *Config) *EtcdNamespace {
 	etcdConfig.InitialClusterToken = config.GroupId
 	etcdConfig.InitialCluster = config.BootstrapCluster()
 
+	clientBindUrl, err := url.Parse(selfNode.ClientBindEndpoint())
+	if err != nil {
+		return nil
+	}
 	clientUrl, err := url.Parse(selfNode.ClientEndpoint())
 	if err != nil {
 		return nil
 	}
 
+	peerBindUrl, err := url.Parse(selfNode.PeerBindEndpoint())
+	if err != nil {
+		return nil
+	}
 	peerUrl, err := url.Parse(selfNode.PeerEndpoint())
 	if err != nil {
 		return nil
 	}
 
-	etcdConfig.LCUrls = []url.URL{*clientUrl}
+	etcdConfig.LCUrls = []url.URL{*clientBindUrl}
 	etcdConfig.ACUrls = []url.URL{*clientUrl}
-	etcdConfig.LPUrls = []url.URL{*peerUrl}
+	etcdConfig.LPUrls = []url.URL{*peerBindUrl}
 	etcdConfig.APUrls = []url.URL{*peerUrl}
 
 	this.etcdConfig = etcdConfig
@@ -143,15 +154,19 @@ func (this *EtcdNamespace) Open() error {
 		return err
 	}
 
-	etcd, err := embed.StartEtcd(this.etcdConfig)
+	glog.V(logging.LogLevelDebug).Infof("Starting internal etcd with config: %+v", this.etcdConfig)
+
+	embeddedEtcd, err := embed.StartEtcd(this.etcdConfig)
 	if err != nil {
 		this.fsm.To(StateError)
 		return err
 	}
 
-	<-etcd.Server.ReadyNotify()
+	<-embeddedEtcd.Server.ReadyNotify()
 
-	this.etcd = etcd
+	glog.V(logging.LogLevelDebug).Infof("Started internal etcd")
+
+	this.etcd = embeddedEtcd
 
 	endpoints := this.config.ClientEndpoints()
 

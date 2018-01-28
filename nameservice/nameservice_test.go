@@ -1,7 +1,7 @@
 package nameservice
 
 import (
-	"bfs/ns"
+	"bfs/ns/etcd"
 	"bfs/test"
 	"bfs/util/logging"
 	"context"
@@ -24,7 +24,17 @@ func TestNameService(t *testing.T) {
 	require.NoError(t, err)
 	defer testDir.Destroy()
 
-	namespace := ns.New(testDir.Path)
+	etcdPortBase := 7006
+
+	namespace := etcd.New(&etcd.Config{
+		GroupId: "ns-shard-1",
+		Path:    testDir.Path,
+		Self:    0,
+		Nodes: []*etcd.NsNode{
+			{Id: "localhost", Hostname: "localhost", BindAddress: "0.0.0.0", ClientPort: int32(etcdPortBase),
+				PeerPort: int32(etcdPortBase) + 1},
+		},
+	})
 	err = namespace.Open()
 	require.NoError(t, err)
 	defer namespace.Close()

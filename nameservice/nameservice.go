@@ -2,6 +2,7 @@ package nameservice
 
 import (
 	"bfs/ns"
+	"bfs/ns/etcd"
 	"context"
 	"io"
 	"time"
@@ -12,10 +13,10 @@ const (
 )
 
 type NameService struct {
-	Namespace *ns.Namespace
+	Namespace *etcd.EtcdNamespace
 }
 
-func New(namespace *ns.Namespace) *NameService {
+func New(namespace *etcd.EtcdNamespace) *NameService {
 	return &NameService{
 		Namespace: namespace,
 	}
@@ -85,26 +86,26 @@ func (this *NameService) Add(ctx context.Context, request *AddRequest) (*AddResp
 }
 
 func (this *NameService) Delete(ctx context.Context, request *DeleteRequest) (*DeleteResponse, error) {
-	entriesDeleted, err := this.Namespace.Delete(request.Path, request.Recursive)
+	entriesDeleted, err := this.Namespace.Remove(request.Path, request.Recursive)
 
-	return &DeleteResponse{EntriesDeleted: entriesDeleted}, err
+	return &DeleteResponse{EntriesDeleted: uint32(entriesDeleted)}, err
 }
 
 func (this *NameService) Rename(ctx context.Context, request *RenameRequest) (*RenameResponse, error) {
-	ok, err := this.Namespace.Rename(request.SourcePath, request.DestinationPath)
+	err := this.Namespace.Rename(request.SourcePath, request.DestinationPath)
 	if err != nil {
 		return nil, err
 	}
 
 	return &RenameResponse{
-		Success: ok,
+		Success: true,
 	}, nil
 }
 
 func (this *NameService) List(request *ListRequest, stream NameService_ListServer) error {
 	var pEntries []*Entry
 
-	err := this.Namespace.List(request.StartKey, request.EndKey, func(entry *ns.Entry, err error) (bool, error) {
+	err := this.Namespace.List(request.StartKey, func(entry *ns.Entry, err error) (bool, error) {
 		if err == io.EOF {
 			err := stream.Send(&ListResponse{
 				Entries: pEntries,

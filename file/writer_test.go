@@ -32,7 +32,10 @@ func TestLocalFileWriter_Write(t *testing.T) {
 		testDir.Destroy()
 	}()
 
-	bindAddress := fmt.Sprintf("%s:%d", "localhost", 8084)
+	rpcPort := 8080
+	etcdPortBase := 7002
+
+	bindAddress := fmt.Sprintf("%s:%d", "localhost", rpcPort)
 
 	rpcServer := grpc.NewServer(
 		grpc.WriteBufferSize(size.MB*8),
@@ -45,7 +48,7 @@ func TestLocalFileWriter_Write(t *testing.T) {
 	blockServer := blockserver.New(
 		&config.BlockServiceConfig{
 			Hostname: "localhost",
-			Port:     8084,
+			Port:     int32(rpcPort),
 			VolumeConfigs: []*config.PhysicalVolumeConfig{
 				{Path: filepath.Join(testDir.Path, "pv1"), AllowAutoInitialize: true, Labels: map[string]string{}},
 				{Path: filepath.Join(testDir.Path, "pv2"), AllowAutoInitialize: true, Labels: map[string]string{}},
@@ -60,8 +63,13 @@ func TestLocalFileWriter_Write(t *testing.T) {
 	nameServer := nameserver.New(
 		&config.NameServiceConfig{
 			Hostname: "localhost",
-			Port:     8084,
+			Port:     int32(rpcPort),
 			Path:     filepath.Join(testDir.Path, "ns"),
+			GroupId:  "ns-shard1-",
+			Nodes: []*config.NameServiceNodeConfig{
+				{Id: "localhost", Hostname: "localhost", BindAddress: "0.0.0.0", ClientPort: int32(etcdPortBase),
+					PeerPort: int32(etcdPortBase) + 1},
+			},
 		},
 		rpcServer,
 	)
@@ -155,7 +163,10 @@ func BenchmarkLocalFileWriter_Write(b *testing.B) {
 		testDir.Destroy()
 	}()
 
-	bindAddress := fmt.Sprintf("%s:%d", "localhost", 8084)
+	rpcPort := 8080
+	etcdPortBase := 7002
+
+	bindAddress := fmt.Sprintf("%s:%d", "localhost", rpcPort)
 
 	rpcServer := grpc.NewServer(
 		grpc.WriteBufferSize(size.MB*8),
@@ -168,7 +179,7 @@ func BenchmarkLocalFileWriter_Write(b *testing.B) {
 	blockServer := blockserver.New(
 		&config.BlockServiceConfig{
 			Hostname: "localhost",
-			Port:     8084,
+			Port:     int32(rpcPort),
 			VolumeConfigs: []*config.PhysicalVolumeConfig{
 				{Path: filepath.Join(testDir.Path, "pv1"), AllowAutoInitialize: true, Labels: map[string]string{}},
 				{Path: filepath.Join(testDir.Path, "pv2"), AllowAutoInitialize: true, Labels: map[string]string{}},
@@ -183,8 +194,12 @@ func BenchmarkLocalFileWriter_Write(b *testing.B) {
 	nameServer := nameserver.New(
 		&config.NameServiceConfig{
 			Hostname: "localhost",
-			Port:     8084,
+			Port:     int32(rpcPort),
 			Path:     filepath.Join(testDir.Path, "ns"),
+			GroupId:  "ns-shard-1",
+			Nodes: []*config.NameServiceNodeConfig{
+				{Id: "localhost", Hostname: "localhost", ClientPort: int32(etcdPortBase), PeerPort: int32(etcdPortBase) + 1},
+			},
 		},
 		rpcServer,
 	)

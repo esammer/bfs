@@ -24,13 +24,21 @@ func TestNameServer(t *testing.T) {
 	require.NoError(t, testDir.Create())
 	defer testDir.Destroy()
 
+	rpcPort := 8083
+	etcdPortBase := 7008
+
 	nsc := &config.NameServiceConfig{
 		Hostname: "localhost",
-		Port:     8086,
+		Port:     int32(rpcPort),
 		Path:     filepath.Join(testDir.Path, "ns"),
+		GroupId:  "ns-shard-1",
+		Nodes: []*config.NameServiceNodeConfig{
+			{Id: "localhost", Hostname: "localhost", BindAddress: "0.0.0.0", ClientPort: int32(etcdPortBase),
+				PeerPort: int32(etcdPortBase) + 1},
+		},
 	}
 
-	bindAddress := fmt.Sprintf("%s:%d", "localhost", 8086)
+	bindAddress := fmt.Sprintf("%s:%d", "localhost", rpcPort)
 	listener, err := net.Listen("tcp", bindAddress)
 	require.NoError(t, err)
 	rpcServer := grpc.NewServer()

@@ -26,7 +26,17 @@ message BlockServiceConfig {
 message NameServiceConfig {
   string hostname = 1;
   int32 port = 2;
-  string path = 3;
+  string groupId = 3;
+  string path = 4;
+  repeated NameServiceNodeConfig nodes = 5;
+}
+
+message NameServiceNodeConfig {
+  string id = 1;
+  string hostname = 2;
+  string bindAddress = 3;
+  int32 clientPort = 4;
+  int32 peerPort = 5;
 }
 
 message PhysicalVolumeConfig {
