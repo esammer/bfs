@@ -9,4 +9,4 @@ before_install:
   - go get -u github.com/golang/dep/cmd/dep
   - go get -u github.com/golang/protobuf/protoc-gen-go
 script:
-  - PATH=bin:$PATH make
+  - PATH=bin:$PATH make v=1
