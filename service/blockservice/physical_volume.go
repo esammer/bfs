@@ -1,9 +1,8 @@
 package blockservice
 
 import (
+	"bfs/util/fsm"
 	"bfs/util/logging"
-	"bfs/volumeutil"
-	"errors"
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/pborman/uuid"
@@ -18,11 +17,25 @@ import (
  * PhysicalVolume
  */
 
+const (
+	StateInitial = "INITIAL"
+	StateOpen    = "OPEN"
+	StateClosed  = "CLOSED"
+	StateError   = "ERROR"
+)
+
+var volumeFSM = fsm.New(StateInitial).
+	Allow(StateInitial, StateOpen).
+	Allow(StateInitial, StateError).
+	Allow(StateOpen, StateClosed).
+	Allow(StateOpen, StateError).
+	Allow(StateError, StateClosed)
+
 type PhysicalVolume struct {
 	ID       uuid.UUID
 	RootPath string
 
-	state volumeutil.VolumeState
+	fsm *fsm.FSMInstance
 }
 
 func NewPhysicalVolume(rootPath string) *PhysicalVolume {
@@ -30,21 +43,22 @@ func NewPhysicalVolume(rootPath string) *PhysicalVolume {
 
 	return &PhysicalVolume{
 		RootPath: rootPath,
-		state:    volumeutil.VolumeState_Initial,
+		fsm:      volumeFSM.NewInstance(),
 	}
 }
 
 func (this *PhysicalVolume) Open(allowInitialization bool) error {
 	glog.Infof("Open physical volume at %v", this.RootPath)
 
-	if this.state != volumeutil.VolumeState_Initial {
-		return fmt.Errorf("Can not open volume from state %v", this.state)
+	if err := this.fsm.Is(StateInitial); err != nil {
+		return err
 	}
 
 	idPath := filepath.Join(this.RootPath, "id")
 
 	if info, err := os.Stat(idPath); err == nil {
 		if !info.Mode().IsRegular() {
+			this.fsm.To(StateError)
 			return fmt.Errorf("Unable to open volume - %v is not a file", idPath)
 		}
 	} else if allowInitialization {
@@ -56,58 +70,58 @@ func (this *PhysicalVolume) Open(allowInitialization bool) error {
 
 		id := uuid.NewRandom()
 		if err := ioutil.WriteFile(idPath, id, 0644); err != nil {
+			this.fsm.To(StateError)
 			return err
 		}
 
 		glog.Infof("Generated volume ID: %v", id.String())
 	} else {
+		this.fsm.To(StateError)
 		return err
 	}
 
 	id, err := ioutil.ReadFile(idPath)
 	if err != nil {
+		this.fsm.To(StateError)
 		return err
 	}
 
 	this.ID = id
-	this.state = volumeutil.VolumeState_Open
 
 	glog.Infof("Opened physical volume %s at %s", this.ID, this.RootPath)
 
-	return nil
+	return this.fsm.To(StateOpen)
 }
 
 func (this *PhysicalVolume) Close() error {
 	glog.Infof("Close physical volume at %v", this.RootPath)
 
-	if this.state == volumeutil.VolumeState_Open {
-		this.state = volumeutil.VolumeState_Closed
-	} else {
-		return errors.New("Can not close unopened volume!")
+	if err := this.fsm.IsOneOf(StateOpen, StateError); err != nil {
+		return err
 	}
 
-	return nil
+	return this.fsm.To(StateClosed)
 }
 
 func (this *PhysicalVolume) OpenRead(blockId string) (block.BlockReader, error) {
-	if this.state != volumeutil.VolumeState_Open {
-		return nil, fmt.Errorf("Can not create block reader on volume in state %v", this.state)
+	if err := this.fsm.Is(StateOpen); err != nil {
+		return nil, err
 	}
 
 	return block.NewReader(this.RootPath, blockId)
 }
 
 func (this *PhysicalVolume) OpenWrite(blockId string) (block.BlockWriter, error) {
-	if this.state != volumeutil.VolumeState_Open {
-		return nil, fmt.Errorf("Can not create block writer on volume in state %v", this.state)
+	if err := this.fsm.Is(StateOpen); err != nil {
+		return nil, err
 	}
 
 	return block.NewWriter(this.RootPath, blockId)
 }
 
 func (this *PhysicalVolume) Delete(blockId string) error {
-	if this.state != volumeutil.VolumeState_Open {
-		return fmt.Errorf("Can not create block writer on volume in state %v", this.state)
+	if err := this.fsm.Is(StateOpen); err != nil {
+		return err
 	}
 
 	path := filepath.Join(this.RootPath, blockId)

@@ -17,8 +17,7 @@ PACKAGES = . \
 	$(PROJECT)/test \
 	$(PROJECT)/util/fsm \
 	$(PROJECT)/util/logging \
-	$(PROJECT)/util/size \
-	$(PROJECT)/volumeutil
+	$(PROJECT)/util/size
 PROJECT_DIRS = . \
 	block \
 	client \
@@ -35,8 +34,7 @@ PROJECT_DIRS = . \
 	test \
 	util/fsm \
 	util/logging \
-	util/size \
-	volumeutil
+	util/size
 PROTO_FILES = \
 	config/config.pb.go \
 	service/blockservice/blockservice.pb.go \

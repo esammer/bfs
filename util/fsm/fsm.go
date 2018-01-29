@@ -95,7 +95,7 @@ func (this *FSMInstance) Can(to interface{}) bool {
 	return this.fsm.Can(this.state, to)
 }
 
-// Transition to the given given.
+// Transition to the given state.
 //
 // Returns a TransitionErr if the transition is not allowed.
 func (this *FSMInstance) To(to interface{}) error {
@@ -109,6 +109,27 @@ func (this *FSMInstance) To(to interface{}) error {
 
 	this.state = to
 	return nil
+}
+
+// Transition to the given state.
+//
+// Returns a TransitionErr if the transition is not allowed. If the transition is successful, return the
+// provided error. This form of transition is a convenience for transitioning in the face of errors where
+// one needs to return no matter what.
+//
+// Ex:
+// 	err := SomeFunc()
+//
+// 	if err != nil {
+// 		return fsmInst.ToWithErr("ERROR", err)
+// 	}
+//
+func (this *FSMInstance) ToWithErr(to interface{}, err error) error {
+	if err := this.To(to); err != nil {
+		return err
+	}
+
+	return err
 }
 
 // Determines whether the current state is equal to the given state.
